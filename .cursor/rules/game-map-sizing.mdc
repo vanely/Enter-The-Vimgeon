@@ -1,0 +1,17 @@
+---
+description: Game map should fill most of the screen for non-tutorial levels
+globs: src/data/rooms/**/*.ts
+alwaysApply: false
+---
+
+# Game Map Sizing
+
+Tutorial levels use small rooms (42x16) for focused teaching. All later levels (Floor 1+) should use much larger rooms that fill most of the viewport.
+
+- Target room size for gameplay levels: ~80x30 characters minimum
+- The GameGrid should expand to fill available screen space between the HUD and MessageLog
+- Room dimensions should be responsive — consider the player's viewport
+- When designing room templates, use the full width/height to create interesting layouts
+- Floor tiles, props, and enemies should be spread across the full area to avoid clustering
+
+The renderer already supports arbitrary room sizes — just increase ROOM_W and ROOM_H in level data files.
