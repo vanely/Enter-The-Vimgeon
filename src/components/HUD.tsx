@@ -47,6 +47,16 @@ export function HUD() {
   const mp = useGameStore((s) => s.playerMP);
   const maxMP = useGameStore((s) => s.playerMaxMP);
   const currentLevel = useGameStore((s) => s.currentLevel);
+  const pendingVisualInner = useGameStore((s) => s.pendingVisualInner);
+  const playerDir = useGameStore((s) => s.playerDir);
+
+  let pendingDisplay: string | null = null;
+  if (pendingVisualInner === 'i') pendingDisplay = 'vi_';
+  else if (pendingVisualInner === '(' || pendingVisualInner === '{') {
+    pendingDisplay = `vi${pendingVisualInner}_`;
+  }
+
+  const dirArrow = playerDir.dx === 1 ? '>' : playerDir.dx === -1 ? '<' : playerDir.dy === 1 ? 'v' : '^';
 
   return (
     <div
@@ -64,6 +74,12 @@ export function HUD() {
       }}
     >
       <ModeIndicator mode={mode} />
+      {pendingDisplay && (
+        <span style={{ color: COLORS.pendingKey, fontWeight: 'bold' }}>
+          {pendingDisplay}
+        </span>
+      )}
+      <span style={{ color: COLORS.projectilePlayer, fontWeight: 'bold' }}>{dirArrow}</span>
       <HealthBar current={hp} max={maxHP} color={COLORS.hpFull} emptyColor={COLORS.hpEmpty} label="HP" />
       <HealthBar current={mp} max={maxMP} color={COLORS.mpFull} emptyColor={COLORS.mpEmpty} label="MP" />
       <span style={{ color: COLORS.textDim, marginLeft: 'auto' }}>

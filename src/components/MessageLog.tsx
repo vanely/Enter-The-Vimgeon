@@ -6,6 +6,16 @@ export function MessageLog() {
   const nearbyItem = useGameStore((s) => s.nearbyItem);
   const mode = useGameStore((s) => s.mode);
   const inventory = useGameStore((s) => s.inventory);
+  const inventoryItems = useGameStore((s) => s.inventoryItems);
+  const containers = useGameStore((s) => s.containers);
+  const playerPos = useGameStore((s) => s.playerPos);
+
+
+  const nearbyContainer = containers.find(
+    (c) => !c.opened &&
+      Math.abs(c.pos.x - playerPos.x) <= 2 &&
+      Math.abs(c.pos.y - playerPos.y) <= 1
+  );
 
   const recentMessages = messages.slice(-3);
 
@@ -31,6 +41,11 @@ export function MessageLog() {
           &gt; VISUAL: [{nearbyItem.name}] selected -- press <span style={{ color: COLORS.accent }}>y</span> to yank
         </div>
       )}
+      {!nearbyItem && nearbyContainer && mode === 'NORMAL' && (
+        <div style={{ color: COLORS.barrel, fontWeight: 'bold', marginBottom: '2px' }}>
+          &gt; [{nearbyContainer.bracketType === '(' ? 'Barrel' : 'Chest'}] Use <span style={{ color: COLORS.modeVisual }}>vi{nearbyContainer.bracketType}y</span> to loot (Shift required)
+        </div>
+      )}
       {recentMessages.map((msg, i) => (
         <div
           key={msg.timestamp + i}
@@ -42,12 +57,13 @@ export function MessageLog() {
           &gt; {msg.text}
         </div>
       ))}
-      {recentMessages.length === 0 && !nearbyItem && (
+      {recentMessages.length === 0 && !nearbyItem && !nearbyContainer && (
         <div style={{ color: COLORS.textDim }}>&gt; ...</div>
       )}
-      {inventory.length > 0 && (
-        <div style={{ color: COLORS.textDim, marginTop: '4px', borderTop: `1px solid ${COLORS.textDim}`, paddingTop: '2px' }}>
-          Inventory: {inventory.map((id) => `[${id}]`).join(' ')}
+      {inventoryItems.length > 0 && (
+        <div style={{ color: COLORS.textDim, marginTop: '4px', borderTop: `1px solid ${COLORS.textDim}`, paddingTop: '2px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <span>Items: {inventoryItems.map((item) => `${item.char}${item.count > 1 ? `x${item.count}` : ''}`).join(' ')}</span>
+          <span style={{ marginLeft: 'auto', fontSize: '11px' }}>:inv</span>
         </div>
       )}
     </div>

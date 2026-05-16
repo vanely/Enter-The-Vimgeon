@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useGameStore, initTutorialLevels } from './engine/gameState';
 import { handleKeyDown, handleKeyUp } from './engine/input';
+import { startLoop, stopLoop } from './engine/gameLoop';
 import { tutorialLevels } from './data/rooms/tutorial';
 import { GameGrid } from './components/GameGrid';
 import { HUD } from './components/HUD';
@@ -10,6 +11,8 @@ import { SignPopup } from './components/SignPopup';
 import { HelpMenu } from './components/HelpMenu';
 import { TutorialHint } from './components/TutorialHint';
 import { TitleScreen } from './components/TitleScreen';
+import { DeathScreen } from './components/DeathScreen';
+import { InventoryScreen } from './components/InventoryScreen';
 import { COLORS } from './utils/colors';
 
 initTutorialLevels(tutorialLevels);
@@ -17,6 +20,9 @@ initTutorialLevels(tutorialLevels);
 export default function App() {
   const gameStarted = useGameStore((s) => s.gameStarted);
   const startGame = useGameStore((s) => s.startGame);
+  const enemies = useGameStore((s) => s.enemies);
+  const projectiles = useGameStore((s) => s.projectiles);
+  const playerDead = useGameStore((s) => s.playerDead);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -40,6 +46,21 @@ export default function App() {
     };
   }, [gameStarted, startGame]);
 
+  useEffect(() => {
+    const hasActiveEnemies = enemies.some((e) => !e.dead);
+    const hasProjectiles = projectiles.length > 0;
+
+    if ((hasActiveEnemies || hasProjectiles) && !playerDead) {
+      startLoop();
+    } else {
+      stopLoop();
+    }
+
+    return () => {
+      stopLoop();
+    };
+  }, [enemies, projectiles, playerDead]);
+
   if (!gameStarted) {
     return <TitleScreen />;
   }
@@ -60,6 +81,8 @@ export default function App() {
         <GameGrid />
         <SignPopup />
         <TutorialHint />
+        <DeathScreen />
+        <InventoryScreen />
       </div>
       <CommandLine />
       <MessageLog />

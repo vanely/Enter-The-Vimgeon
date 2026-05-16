@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import { createCell } from '../utils/ascii';
 import type { Cell } from '../utils/ascii';
 import { COLORS } from '../utils/colors';
-import type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState } from './types';
+import type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem } from './types';
+import type { EnemyAI } from './types';
 
-export type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState };
+export type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem, EnemyAI };
 
 function doorKey(pos: Position): string {
   return `${pos.x},${pos.y}`;
@@ -14,9 +15,14 @@ function isSignChar(char: string): boolean {
   return char === '[' || char === '?' || char === ']';
 }
 
+function isBracketChar(char: string): boolean {
+  return char === '(' || char === ')' || char === '{' || char === '}';
+}
+
 function isWalkable(char: string): boolean {
-  if (char === '.' || char === ' ' || char === '@' || isSignChar(char)) return true;
+  if (char === '.' || char === ' ' || char === '@' || isSignChar(char) || isBracketChar(char)) return true;
   if (char >= 'A' && char <= 'Z') return true;
+  if (char >= 'a' && char <= 'z') return true;
   return false;
 }
 
@@ -24,7 +30,7 @@ function isDoorChar(char: string): boolean {
   return char === '|' || char === '-';
 }
 
-function buildGrid(room: RoomTemplate, playerPos: Position, doorStates: Map<string, boolean>): Cell[][] {
+function buildGrid(room: RoomTemplate, _playerPos: Position, doorStates: Map<string, boolean>): Cell[][] {
   const grid: Cell[][] = [];
 
   for (let y = 0; y < room.height; y++) {
@@ -72,6 +78,12 @@ function buildGrid(room: RoomTemplate, playerPos: Position, doorStates: Map<stri
         case '*':
           cell = createCell(char, COLORS.accent);
           break;
+        case '(':
+        case ')':
+        case '{':
+        case '}':
+          cell = createCell(char, COLORS.modeVisual);
+          break;
         default:
           cell = createCell(char, COLORS.text);
           break;
@@ -88,12 +100,89 @@ function buildGrid(room: RoomTemplate, playerPos: Position, doorStates: Map<stri
     }
   }
 
-  if (playerPos.y >= 0 && playerPos.y < grid.length &&
-      playerPos.x >= 0 && playerPos.x < grid[0].length) {
-    grid[playerPos.y][playerPos.x] = createCell('@', COLORS.player, undefined, true);
+  return grid;
+}
+
+function renderCombatEntities(
+  grid: Cell[][],
+  playerPos: Position,
+  enemies: Enemy[],
+  barrels: Barrel[],
+  projectiles: Projectile[],
+  playerInvincible: number,
+  containers: Container[] = [],
+): void {
+  for (const container of containers) {
+    const { x, y } = container.pos;
+    if (y < 0 || y >= grid.length) continue;
+    if (!container.opened) {
+      const [lChar, rChar] = container.bracketType === '(' ? ['(', ')'] : ['{', '}'];
+      if (x - 1 >= 0 && x - 1 < grid[0].length)
+        grid[y][x - 1] = createCell(lChar, COLORS.barrel, undefined, true);
+      if (x >= 0 && x < grid[0].length)
+        grid[y][x] = createCell('?', COLORS.barrel, undefined, true);
+      if (x + 1 >= 0 && x + 1 < grid[0].length)
+        grid[y][x + 1] = createCell(rChar, COLORS.barrel, undefined, true);
+    } else {
+      if (x - 1 >= 0 && x - 1 < grid[0].length)
+        grid[y][x - 1] = createCell('.', COLORS.floor, undefined, false);
+      if (x >= 0 && x < grid[0].length)
+        grid[y][x] = createCell('.', COLORS.floor, undefined, false);
+      if (x + 1 >= 0 && x + 1 < grid[0].length)
+        grid[y][x + 1] = createCell('.', COLORS.floor, undefined, false);
+    }
   }
 
+  for (const barrel of barrels) {
+    const { x, y } = barrel.pos;
+    if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) continue;
+    if (!barrel.destroyed) {
+      grid[y][x] = createCell('O', COLORS.barrel, undefined, true);
+    } else if (barrel.explosionFrame >= 0 && barrel.explosionFrame < 3) {
+      const frames = ['X', '*', '.'];
+      grid[y][x] = createCell(frames[barrel.explosionFrame], COLORS.explosion, COLORS.explosionBg, true);
+    }
+  }
+
+  for (const enemy of enemies) {
+    if (enemy.dead) continue;
+    const { x, y } = enemy.pos;
+    if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) continue;
+    grid[y][x] = createCell(enemy.chars[0], COLORS.enemy, COLORS.enemyBg, true);
+  }
+
+  for (const proj of projectiles) {
+    const { x, y } = proj.pos;
+    if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) continue;
+    const color = proj.owner === 'player' ? COLORS.projectilePlayer : COLORS.projectileEnemy;
+    grid[y][x] = createCell(proj.char, color, undefined, true);
+  }
+
+  if (playerPos.y >= 0 && playerPos.y < grid.length &&
+      playerPos.x >= 0 && playerPos.x < grid[0].length) {
+    const playerColor = playerInvincible > 0 ? COLORS.playerHurt : COLORS.player;
+    grid[playerPos.y][playerPos.x] = createCell('@', playerColor, undefined, true);
+  }
+}
+
+function buildFullGrid(
+  room: RoomTemplate,
+  playerPos: Position,
+  doorStates: Map<string, boolean>,
+  enemies: Enemy[] = [],
+  barrels: Barrel[] = [],
+  projectiles: Projectile[] = [],
+  playerInvincible: number = 0,
+  containers: Container[] = [],
+): Cell[][] {
+  const grid = buildGrid(room, playerPos, doorStates);
+  renderCombatEntities(grid, playerPos, enemies, barrels, projectiles, playerInvincible, containers);
   return grid;
+}
+
+function storeGrid(room: RoomTemplate, playerPos: Position, doorStates: Map<string, boolean>, get: () => GameState): Cell[][] {
+  const s = get();
+  return buildFullGrid(room, playerPos, doorStates, s.enemies, s.barrels, s.projectiles, s.playerInvincible, s.containers);
 }
 
 function findPlayerStart(layout: string[]): Position {
@@ -164,6 +253,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   unlockedKeys: new Set(['h', 'j', 'k', 'l']),
   doorStates: new Map(),
   inventory: [],
+  inventoryItems: [],
+  inventoryOpen: false,
+  inventoryCursor: 0,
   gameStarted: false,
   hintVisible: false,
   hintText: '',
@@ -171,11 +263,24 @@ export const useGameStore = create<GameState>((set, get) => ({
   nearbyItem: null,
   tutorialComplete: false,
 
+  enemies: [],
+  barrels: [],
+  containers: [],
+  projectiles: [],
+  playerDir: { dx: 1, dy: 0 },
+  lastShotDir: null,
+  playerInvincible: 0,
+  pendingKey: null,
+  pendingVisualInner: null,
+  playerDead: false,
+
   setMode: (mode) => set({ mode }),
 
   movePlayer: (dx, dy) => {
     const state = get();
-    if (state.mode !== 'NORMAL' || state.helpOpen || state.signPopup) return;
+    if (state.mode !== 'NORMAL' || state.helpOpen || state.signPopup || state.playerDead) return;
+
+    set({ playerDir: { dx, dy } });
 
     const newX = state.playerPos.x + dx;
     const newY = state.playerPos.y + dy;
@@ -205,7 +310,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         }];
         set({
           doorStates: newDoorStates,
-          renderedGrid: buildGrid(room, state.playerPos, newDoorStates),
+          renderedGrid: storeGrid(room, state.playerPos, newDoorStates, get),
           messages: newMessages,
           lastInputTime: Date.now(),
           hintVisible: false,
@@ -222,7 +327,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         const newPos = { x: newX, y: newY };
         set({
           playerPos: newPos,
-          renderedGrid: buildGrid(room, newPos, state.doorStates),
+          renderedGrid: storeGrid(room, newPos, state.doorStates, get),
           signPopup: null,
           lastInputTime: Date.now(),
           hintVisible: false,
@@ -237,6 +342,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
 
+    const enemyBlocking = state.enemies.some((e) => !e.dead && e.pos.x === newX && e.pos.y === newY);
+    if (enemyBlocking) return;
+
+    const barrelBlocking = state.barrels.some((b) => !b.destroyed && b.pos.x === newX && b.pos.y === newY);
+    if (barrelBlocking) return;
+
+    const containerBlocking = state.containers.some((c) => !c.opened && c.pos.y === newY && newX >= c.pos.x - 1 && newX <= c.pos.x + 1);
+    if (containerBlocking) return;
+
     const newPos = { x: newX, y: newY };
     const sign = checkSignCollision(newPos, room.signs, room.layout);
 
@@ -246,7 +360,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({
       playerPos: newPos,
-      renderedGrid: buildGrid(room, newPos, state.doorStates),
+      renderedGrid: storeGrid(room, newPos, state.doorStates, get),
       signPopup: sign ? sign.text : null,
       nearbyItem: itemHere,
       lastInputTime: Date.now(),
@@ -267,14 +381,13 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     const item = state.nearbyItem;
     item.collected = true;
-    const newInventory = [...state.inventory, item.id];
 
     set({
       mode: 'NORMAL',
-      inventory: newInventory,
       nearbyItem: null,
-      renderedGrid: buildGrid(room, state.playerPos, state.doorStates),
+      renderedGrid: storeGrid(room, state.playerPos, state.doorStates, get),
     });
+    get().addInventoryItem(item.id, item.name, item.char);
     get().addMessage(`Yanked: ${item.name}`, COLORS.keyItem);
   },
 
@@ -290,7 +403,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       currentRoom: room,
       playerPos,
       doorStates,
-      renderedGrid: buildGrid(room, playerPos, doorStates),
+      renderedGrid: buildFullGrid(room, playerPos, doorStates),
       signPopup: null,
       hintVisible: false,
     });
@@ -306,6 +419,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       doors: template.doors.map((d) => ({ ...d, pos: { ...d.pos }, open: false })),
       signs: template.signs.map((s) => ({ ...s, pos: { ...s.pos }, text: [...s.text] })),
       keys: template.keys.map((k) => ({ ...k, pos: { ...k.pos }, collected: false })),
+      enemies: template.enemies.map((e) => ({ ...e, pos: { ...e.pos }, dead: false, ticksSinceShot: 0, ticksSinceMove: 0 })),
+      barrels: template.barrels.map((b) => ({ ...b, pos: { ...b.pos }, destroyed: false, explosionFrame: -1 })),
+      containers: template.containers.map((c) => ({ ...c, pos: { ...c.pos }, item: { ...c.item, pos: { ...c.item.pos } }, opened: false })),
     };
 
     const playerPos = findPlayerStart(level.layout);
@@ -320,7 +436,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       currentRoom: level,
       playerPos,
       doorStates,
-      renderedGrid: buildGrid(level, playerPos, doorStates),
+      renderedGrid: buildFullGrid(level, playerPos, doorStates, level.enemies, level.barrels, [], 0, level.containers),
       signPopup: null,
       messages: [{
         text: `-- ${level.name} --`,
@@ -330,6 +446,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       hintVisible: false,
       mode: 'NORMAL',
       commandBuffer: '',
+      enemies: level.enemies.map((e) => ({ ...e })),
+      barrels: level.barrels.map((b) => ({ ...b })),
+      containers: level.containers.map((c) => ({ ...c })),
+      projectiles: [],
+      playerDir: { dx: 1, dy: 0 },
+      lastShotDir: null,
+      playerInvincible: 0,
+      pendingKey: null,
+      pendingVisualInner: null,
+      playerDead: false,
+      playerHP: get().playerMaxHP,
     });
   },
 
@@ -390,7 +517,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         set({
           doorStates: newDoorStates,
-          renderedGrid: buildGrid(room, state.playerPos, newDoorStates),
+          renderedGrid: storeGrid(room, state.playerPos, newDoorStates, get),
           commandBuffer: '',
           mode: 'NORMAL',
           inventory: newInventory,
@@ -406,6 +533,20 @@ export const useGameStore = create<GameState>((set, get) => ({
         get().addMessage('There is no door to open here.', COLORS.textDim);
         set({ commandBuffer: '', mode: 'NORMAL' });
       }
+      return;
+    }
+
+    if (trimmed === 'inv' || trimmed === 'inventory') {
+      set({ inventoryOpen: true, inventoryCursor: 0, commandBuffer: '', mode: 'NORMAL' });
+      get().addMessage('Opening inventory...', COLORS.signText);
+      return;
+    }
+
+    if (trimmed === 'retry') {
+      const level = state.currentLevel;
+      set({ commandBuffer: '', mode: 'NORMAL' });
+      get().loadLevel(level);
+      get().addMessage('Restarting level...', COLORS.accent);
       return;
     }
 
@@ -434,7 +575,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const room = s.currentRoom;
     return {
       doorStates: newDoorStates,
-      renderedGrid: room ? buildGrid(room, s.playerPos, newDoorStates) : s.renderedGrid,
+      renderedGrid: room ? buildFullGrid(room, s.playerPos, newDoorStates, s.enemies, s.barrels, s.projectiles, s.playerInvincible) : s.renderedGrid,
     };
   }),
 
@@ -446,4 +587,109 @@ export const useGameStore = create<GameState>((set, get) => ({
   showHint: (text) => set({ hintVisible: true, hintText: text }),
   hideHint: () => set({ hintVisible: false, hintText: '' }),
   updateLastInputTime: () => set({ lastInputTime: Date.now(), hintVisible: false }),
+
+  setEnemies: (enemies) => set({ enemies }),
+  setBarrels: (barrels) => set({ barrels }),
+  setContainers: (containers) => set({ containers }),
+  setProjectiles: (projectiles) => set({ projectiles }),
+  setPendingKey: (key) => set({ pendingKey: key }),
+  setPendingVisualInner: (key) => set({ pendingVisualInner: key }),
+  setPlayerDead: (dead) => set({ playerDead: dead }),
+  setPlayerInvincible: (ticks) => set({ playerInvincible: ticks }),
+  setPlayerDir: (dir) => set({ playerDir: dir }),
+  setLastShotDir: (dir) => set({ lastShotDir: dir }),
+
+  yankFromContainer: (bracketType) => {
+    const state = get();
+    if (state.mode !== 'VISUAL') return;
+
+    const container = state.containers.find(
+      (c) => !c.opened && c.bracketType === bracketType &&
+        Math.abs(c.pos.x - state.playerPos.x) <= 2 &&
+        Math.abs(c.pos.y - state.playerPos.y) <= 1
+    );
+
+    if (!container) {
+      get().addMessage(`No nearby ${bracketType === '(' ? 'barrel' : 'chest'} to open.`, COLORS.textDim);
+      set({ mode: 'NORMAL', pendingVisualInner: null });
+      return;
+    }
+
+    container.opened = true;
+    const item = container.item;
+    item.collected = true;
+
+    set({
+      mode: 'NORMAL',
+      pendingVisualInner: null,
+      containers: state.containers.map((c) => c.id === container.id ? { ...c, opened: true } : c),
+    });
+    get().addInventoryItem(item.id, item.name, item.char);
+    get().addMessage(`Yanked: ${item.name} from ${bracketType === '(' ? 'barrel' : 'chest'}!`, COLORS.keyItem);
+    get().rerenderGrid();
+  },
+
+  toggleInventory: () => {
+    const state = get();
+    set({ inventoryOpen: !state.inventoryOpen, inventoryCursor: 0 });
+  },
+
+  setInventoryCursor: (cursor) => set({ inventoryCursor: cursor }),
+
+  assignQuickSlot: (itemIndex, slot) => {
+    const state = get();
+    const items = state.inventoryItems.map((item, i) => {
+      if (i === itemIndex) return { ...item, quickSlot: slot };
+      if (item.quickSlot === slot) return { ...item, quickSlot: null };
+      return item;
+    });
+    set({ inventoryItems: items });
+  },
+
+  addInventoryItem: (id, name, char) => {
+    const state = get();
+    const existing = state.inventoryItems.find((item) => item.id === id);
+    if (existing) {
+      set({
+        inventoryItems: state.inventoryItems.map((item) =>
+          item.id === id ? { ...item, count: item.count + 1 } : item
+        ),
+        inventory: [...state.inventory, id],
+      });
+    } else {
+      set({
+        inventoryItems: [...state.inventoryItems, { id, name, char, count: 1, quickSlot: null }],
+        inventory: [...state.inventory, id],
+      });
+    }
+  },
+
+  rerenderGrid: () => {
+    const s = get();
+    const room = s.currentRoom;
+    if (!room) return;
+    set({
+      renderedGrid: buildFullGrid(room, s.playerPos, s.doorStates, s.enemies, s.barrels, s.projectiles, s.playerInvincible, s.containers),
+    });
+  },
+
+  damagePlayer: (amount) => {
+    const state = get();
+    if (state.playerInvincible > 0 || state.playerDead) return;
+
+    const newHP = Math.max(0, state.playerHP - amount);
+    const dead = newHP <= 0;
+
+    set({
+      playerHP: newHP,
+      playerDead: dead,
+      playerInvincible: dead ? 0 : 3,
+    });
+
+    if (dead) {
+      get().addMessage('You have been slain!', COLORS.hpFull);
+    } else {
+      get().addMessage(`Took ${amount} damage! HP: ${newHP}/${state.playerMaxHP}`, COLORS.hpFull);
+    }
+  },
 }));
