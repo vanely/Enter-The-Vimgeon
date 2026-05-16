@@ -136,6 +136,8 @@ export function handleKeyUp(e: KeyboardEvent): void {
 function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameStore.getState>): void {
   const key = e.key;
 
+  if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
+
   if (key in MOVE_KEYS) {
     e.preventDefault();
     startMovement(key, MOVE_KEYS[key]);
@@ -290,6 +292,8 @@ function handleDodgeRoll(state: ReturnType<typeof useGameStore.getState>, dy: nu
 
 function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameStore.getState>): void {
   const key = e.key;
+
+  if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
 
   if (key === 'Escape') {
     e.preventDefault();
