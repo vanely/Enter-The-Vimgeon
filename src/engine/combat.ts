@@ -29,7 +29,7 @@ export function meleeStrike(
 
   const updatedBarrels = barrels.map((b) => {
     if (b.destroyed) return b;
-    const isAdj = adjacentPositions.some((p) => p.x === b.pos.x && p.y === b.pos.y);
+    const isAdj = adjacentPositions.some((p) => p.y === b.pos.y && p.x >= b.pos.x - 1 && p.x <= b.pos.x + 1);
     if (isAdj) {
       barrelHits.push({ ...b.pos });
       return { ...b, destroyed: true, explosionFrame: 0 };
@@ -59,8 +59,10 @@ export function fireShot(
 export function repeatShot(
   playerPos: Position,
   lastDir: { dx: number; dy: number },
+  damage: number = 1,
+  projectileChar?: string,
 ): Projectile {
-  return createProjectile(playerPos, lastDir.dx, lastDir.dy, 'player', 1);
+  return createProjectile(playerPos, lastDir.dx, lastDir.dy, 'player', damage, projectileChar);
 }
 
 export function applyBarrelExplosion(

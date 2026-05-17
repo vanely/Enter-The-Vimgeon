@@ -12,8 +12,9 @@ export function createProjectile(
   dy: number,
   owner: 'player' | 'enemy',
   damage: number = 1,
+  projectileChar?: string,
 ): Projectile {
-  const char = owner === 'player' ? getPlayerBulletChar(dx, dy) : '*';
+  const char = projectileChar ?? (owner === 'player' ? getPlayerBulletChar(dx, dy) : '*');
   return {
     id: nextProjectileId++,
     pos: { x: pos.x + dx, y: pos.y + dy },
@@ -74,7 +75,7 @@ export function advanceProjectiles(
         result.enemyHits.push({ enemyId: hitEnemy.id, damage: proj.damage });
         continue;
       }
-      const hitBarrel = barrels.find((b) => !b.destroyed && b.pos.x === nx && b.pos.y === ny);
+      const hitBarrel = barrels.find((b) => !b.destroyed && b.pos.y === ny && nx >= b.pos.x - 1 && nx <= b.pos.x + 1);
       if (hitBarrel) {
         result.barrelHits.push({ ...hitBarrel.pos });
         continue;

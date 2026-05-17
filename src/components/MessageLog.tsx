@@ -5,7 +5,6 @@ export function MessageLog() {
   const messages = useGameStore((s) => s.messages);
   const nearbyItem = useGameStore((s) => s.nearbyItem);
   const mode = useGameStore((s) => s.mode);
-  const inventory = useGameStore((s) => s.inventory);
   const inventoryItems = useGameStore((s) => s.inventoryItems);
   const containers = useGameStore((s) => s.containers);
   const playerPos = useGameStore((s) => s.playerPos);

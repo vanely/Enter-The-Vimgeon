@@ -91,12 +91,23 @@ export interface RoomTemplate {
   hintDelay?: number;
 }
 
+export interface Weapon {
+  id: string;
+  name: string;
+  projectileChar: string;
+  damage: number;
+  ammoType: 'ammo' | 'cooldown';
+  maxAmmo: number | null;
+  cooldownTicks: number;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
   char: string;
   count: number;
   quickSlot: number | null;
+  weapon?: Weapon;
 }
 
 export interface Message {
@@ -144,6 +155,8 @@ export interface GameState {
   pendingKey: string | null;
   pendingVisualInner: string | null;
   playerDead: boolean;
+  equippedWeaponId: string | null;
+  weaponCooldown: number;
 
   setMode: (mode: VimMode) => void;
   movePlayer: (dx: number, dy: number) => void;
@@ -178,5 +191,6 @@ export interface GameState {
   toggleInventory: () => void;
   setInventoryCursor: (cursor: number) => void;
   assignQuickSlot: (itemIndex: number, slot: number) => void;
-  addInventoryItem: (id: string, name: string, char: string) => void;
+  addInventoryItem: (id: string, name: string, char: string, weapon?: Weapon) => void;
+  equipWeapon: (itemId: string) => void;
 }

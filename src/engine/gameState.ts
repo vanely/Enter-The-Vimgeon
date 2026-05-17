@@ -2,10 +2,15 @@ import { create } from 'zustand';
 import { createCell } from '../utils/ascii';
 import type { Cell } from '../utils/ascii';
 import { COLORS } from '../utils/colors';
-import type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem } from './types';
+import type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem, Weapon } from './types';
 import type { EnemyAI } from './types';
+import { WEAPONS } from '../data/weapons';
 
-export type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem, EnemyAI };
+export type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem, Weapon, EnemyAI };
+
+function lookupWeapon(itemId: string): Weapon | undefined {
+  return WEAPONS[itemId];
+}
 
 function doorKey(pos: Position): string {
   return `${pos.x},${pos.y}`;
@@ -135,12 +140,23 @@ function renderCombatEntities(
 
   for (const barrel of barrels) {
     const { x, y } = barrel.pos;
-    if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) continue;
+    if (y < 0 || y >= grid.length) continue;
     if (!barrel.destroyed) {
-      grid[y][x] = createCell('O', COLORS.barrel, undefined, true);
+      if (x - 1 >= 0 && x - 1 < grid[0].length)
+        grid[y][x - 1] = createCell('(', COLORS.barrel, undefined, true);
+      if (x >= 0 && x < grid[0].length)
+        grid[y][x] = createCell('O', COLORS.barrel, undefined, true);
+      if (x + 1 >= 0 && x + 1 < grid[0].length)
+        grid[y][x + 1] = createCell(')', COLORS.barrel, undefined, true);
     } else if (barrel.explosionFrame >= 0 && barrel.explosionFrame < 3) {
       const frames = ['X', '*', '.'];
-      grid[y][x] = createCell(frames[barrel.explosionFrame], COLORS.explosion, COLORS.explosionBg, true);
+      const explosionChar = frames[barrel.explosionFrame];
+      if (x - 1 >= 0 && x - 1 < grid[0].length)
+        grid[y][x - 1] = createCell(explosionChar, COLORS.explosion, COLORS.explosionBg, true);
+      if (x >= 0 && x < grid[0].length)
+        grid[y][x] = createCell(explosionChar, COLORS.explosion, COLORS.explosionBg, true);
+      if (x + 1 >= 0 && x + 1 < grid[0].length)
+        grid[y][x + 1] = createCell(explosionChar, COLORS.explosion, COLORS.explosionBg, true);
     }
   }
 
@@ -273,6 +289,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   pendingKey: null,
   pendingVisualInner: null,
   playerDead: false,
+  equippedWeaponId: null,
+  weaponCooldown: 0,
 
   setMode: (mode) => set({ mode }),
 
@@ -345,7 +363,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const enemyBlocking = state.enemies.some((e) => !e.dead && e.pos.x === newX && e.pos.y === newY);
     if (enemyBlocking) return;
 
-    const barrelBlocking = state.barrels.some((b) => !b.destroyed && b.pos.x === newX && b.pos.y === newY);
+    const barrelBlocking = state.barrels.some((b) => !b.destroyed && b.pos.y === newY && newX >= b.pos.x - 1 && newX <= b.pos.x + 1);
     if (barrelBlocking) return;
 
     const containerBlocking = state.containers.some((c) => !c.opened && c.pos.y === newY && newX >= c.pos.x - 1 && newX <= c.pos.x + 1);
@@ -387,7 +405,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       nearbyItem: null,
       renderedGrid: storeGrid(room, state.playerPos, state.doorStates, get),
     });
-    get().addInventoryItem(item.id, item.name, item.char);
+    const weapon = lookupWeapon(item.id);
+    get().addInventoryItem(item.id, item.name, item.char, weapon);
     get().addMessage(`Yanked: ${item.name}`, COLORS.keyItem);
   },
 
@@ -456,6 +475,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingKey: null,
       pendingVisualInner: null,
       playerDead: false,
+      weaponCooldown: 0,
       playerHP: get().playerMaxHP,
     });
   },
@@ -542,6 +562,24 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
 
+    if (trimmed.startsWith('equip')) {
+      const weaponId = trimmed.replace('equip', '').trim();
+      if (!weaponId) {
+        get().addMessage('Usage: :equip <weapon_id>', COLORS.textDim);
+        set({ commandBuffer: '', mode: 'NORMAL' });
+        return;
+      }
+      const item = state.inventoryItems.find((i) => i.weapon && (i.weapon.id === weaponId || i.weapon.name.toLowerCase() === weaponId));
+      if (!item || !item.weapon) {
+        get().addMessage(`No weapon "${weaponId}" in inventory.`, COLORS.hpFull);
+        set({ commandBuffer: '', mode: 'NORMAL' });
+        return;
+      }
+      set({ equippedWeaponId: item.weapon.id, commandBuffer: '', mode: 'NORMAL' });
+      get().addMessage(`Equipped: ${item.weapon.name}`, COLORS.keyItem);
+      return;
+    }
+
     if (trimmed === 'retry') {
       const level = state.currentLevel;
       set({ commandBuffer: '', mode: 'NORMAL' });
@@ -624,7 +662,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingVisualInner: null,
       containers: state.containers.map((c) => c.id === container.id ? { ...c, opened: true } : c),
     });
-    get().addInventoryItem(item.id, item.name, item.char);
+    const weapon = lookupWeapon(item.id);
+    get().addInventoryItem(item.id, item.name, item.char, weapon);
     get().addMessage(`Yanked: ${item.name} from ${bracketType === '(' ? 'barrel' : 'chest'}!`, COLORS.keyItem);
     get().rerenderGrid();
   },
@@ -646,7 +685,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ inventoryItems: items });
   },
 
-  addInventoryItem: (id, name, char) => {
+  addInventoryItem: (id, name, char, weapon?) => {
     const state = get();
     const existing = state.inventoryItems.find((item) => item.id === id);
     if (existing) {
@@ -657,11 +696,24 @@ export const useGameStore = create<GameState>((set, get) => ({
         inventory: [...state.inventory, id],
       });
     } else {
+      const newItem: InventoryItem = { id, name, char, count: weapon?.maxAmmo ?? 1, quickSlot: null };
+      if (weapon) newItem.weapon = weapon;
       set({
-        inventoryItems: [...state.inventoryItems, { id, name, char, count: 1, quickSlot: null }],
+        inventoryItems: [...state.inventoryItems, newItem],
         inventory: [...state.inventory, id],
       });
     }
+  },
+
+  equipWeapon: (itemId) => {
+    const state = get();
+    const item = state.inventoryItems.find((i) => i.id === itemId && i.weapon);
+    if (!item || !item.weapon) {
+      get().addMessage('That item is not a weapon.', COLORS.textDim);
+      return;
+    }
+    set({ equippedWeaponId: item.weapon.id });
+    get().addMessage(`Equipped: ${item.weapon.name}`, COLORS.keyItem);
   },
 
   rerenderGrid: () => {

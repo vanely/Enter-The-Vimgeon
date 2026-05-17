@@ -144,6 +144,17 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     return;
   }
 
+  if (e.ctrlKey && key === 'd') {
+    e.preventDefault();
+    handleDodgeRoll(state, 5);
+    return;
+  }
+  if (e.ctrlKey && key === 'u') {
+    e.preventDefault();
+    handleDodgeRoll(state, -5);
+    return;
+  }
+
   switch (key) {
     case 'x':
       e.preventDefault();
@@ -151,7 +162,7 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
       handleMelee(state);
       state.updateLastInputTime();
       break;
-    case ';':
+    case 'd':
       e.preventDefault();
       stopMovement();
       handleShoot(state);
@@ -191,15 +202,6 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
       stopMovement();
       state.setMode('NORMAL');
       state.updateLastInputTime();
-      break;
-    default:
-      if (e.ctrlKey && key === 'd') {
-        e.preventDefault();
-        handleDodgeRoll(state, 5);
-      } else if (e.ctrlKey && key === 'u') {
-        e.preventDefault();
-        handleDodgeRoll(state, -5);
-      }
       break;
   }
 }
@@ -242,12 +244,46 @@ function handleMelee(state: ReturnType<typeof useGameStore.getState>): void {
 }
 
 function handleShoot(state: ReturnType<typeof useGameStore.getState>): void {
-  const proj = repeatShot(state.playerPos, state.playerDir);
+  const weaponId = state.equippedWeaponId;
+  if (!weaponId) {
+    state.addMessage('No weapon equipped. Pick one up and use :equip', COLORS.textDim);
+    return;
+  }
+
+  const item = state.inventoryItems.find((i) => i.weapon && i.weapon.id === weaponId);
+  if (!item || !item.weapon) {
+    state.addMessage('Equipped weapon not found in inventory.', COLORS.textDim);
+    return;
+  }
+
+  const weapon = item.weapon;
+
+  if (weapon.ammoType === 'ammo') {
+    if (item.count <= 0) {
+      state.addMessage(`Out of ammo for ${weapon.name}!`, COLORS.hpFull);
+      return;
+    }
+    useGameStore.setState({
+      inventoryItems: state.inventoryItems.map((i) =>
+        i.id === item.id ? { ...i, count: i.count - 1 } : i
+      ),
+    });
+  } else {
+    if (state.weaponCooldown > 0) {
+      state.addMessage(`${weapon.name} cooling down... (${state.weaponCooldown} ticks)`, COLORS.textDim);
+      return;
+    }
+    useGameStore.setState({ weaponCooldown: weapon.cooldownTicks });
+  }
+
+  const proj = repeatShot(state.playerPos, state.playerDir, weapon.damage, weapon.projectileChar);
   useGameStore.setState({
-    projectiles: [...state.projectiles, proj],
+    projectiles: [...useGameStore.getState().projectiles, proj],
     lastShotDir: state.playerDir,
   });
-  state.addMessage('Shot!', COLORS.projectilePlayer);
+
+  const ammoStr = weapon.ammoType === 'ammo' ? ` (${item.count - 1} left)` : '';
+  state.addMessage(`${weapon.name}!${ammoStr}`, COLORS.projectilePlayer);
   useGameStore.getState().rerenderGrid();
 }
 
@@ -415,6 +451,16 @@ function handleInventoryInput(e: KeyboardEvent, state: ReturnType<typeof useGame
     const slot = parseInt(key);
     if (state.inventoryItems.length > 0) {
       state.assignQuickSlot(state.inventoryCursor, slot);
+    }
+    return;
+  }
+
+  if (key === 'e') {
+    const item = state.inventoryItems[state.inventoryCursor];
+    if (item && item.weapon) {
+      state.equipWeapon(item.id);
+    } else if (item) {
+      state.addMessage('That item is not a weapon.', COLORS.textDim);
     }
     return;
   }

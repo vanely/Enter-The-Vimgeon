@@ -70,11 +70,15 @@ function tick() {
   let invincible = state.playerInvincible;
   if (invincible > 0) invincible--;
 
+  let weaponCooldown = state.weaponCooldown;
+  if (weaponCooldown > 0) weaponCooldown--;
+
   useGameStore.setState({
     enemies,
     barrels,
     projectiles,
     playerInvincible: invincible,
+    weaponCooldown,
   });
 
   if (totalPlayerDamage > 0) {

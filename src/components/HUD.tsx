@@ -49,6 +49,9 @@ export function HUD() {
   const currentLevel = useGameStore((s) => s.currentLevel);
   const pendingVisualInner = useGameStore((s) => s.pendingVisualInner);
   const playerDir = useGameStore((s) => s.playerDir);
+  const equippedWeaponId = useGameStore((s) => s.equippedWeaponId);
+  const inventoryItems = useGameStore((s) => s.inventoryItems);
+  const weaponCooldown = useGameStore((s) => s.weaponCooldown);
 
   let pendingDisplay: string | null = null;
   if (pendingVisualInner === 'i') pendingDisplay = 'vi_';
@@ -57,6 +60,16 @@ export function HUD() {
   }
 
   const dirArrow = playerDir.dx === 1 ? '>' : playerDir.dx === -1 ? '<' : playerDir.dy === 1 ? 'v' : '^';
+
+  let weaponDisplay: string | null = null;
+  if (equippedWeaponId) {
+    const item = inventoryItems.find((i) => i.weapon && i.weapon.id === equippedWeaponId);
+    if (item && item.weapon) {
+      const w = item.weapon;
+      const status = w.ammoType === 'ammo' ? `${item.count}` : (weaponCooldown > 0 ? `CD:${weaponCooldown}` : 'RDY');
+      weaponDisplay = `${w.projectileChar} ${w.name} ${status}`;
+    }
+  }
 
   return (
     <div
@@ -80,6 +93,16 @@ export function HUD() {
         </span>
       )}
       <span style={{ color: COLORS.projectilePlayer, fontWeight: 'bold' }}>{dirArrow}</span>
+      {weaponDisplay && (
+        <span style={{
+          color: COLORS.accent,
+          fontSize: '13px',
+          border: `1px solid ${COLORS.textDim}`,
+          padding: '1px 6px',
+        }}>
+          {weaponDisplay}
+        </span>
+      )}
       <HealthBar current={hp} max={maxHP} color={COLORS.hpFull} emptyColor={COLORS.hpEmpty} label="HP" />
       <HealthBar current={mp} max={maxMP} color={COLORS.mpFull} emptyColor={COLORS.mpEmpty} label="MP" />
       <span style={{ color: COLORS.textDim, marginLeft: 'auto' }}>

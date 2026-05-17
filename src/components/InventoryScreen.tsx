@@ -5,6 +5,7 @@ export function InventoryScreen() {
   const inventoryOpen = useGameStore((s) => s.inventoryOpen);
   const inventoryItems = useGameStore((s) => s.inventoryItems);
   const inventoryCursor = useGameStore((s) => s.inventoryCursor);
+  const equippedWeaponId = useGameStore((s) => s.equippedWeaponId);
 
   if (!inventoryOpen) return null;
 
@@ -107,8 +108,19 @@ export function InventoryScreen() {
                   {i === inventoryCursor ? '>' : ' '}
                 </span>
                 <span style={{ color: COLORS.keyItem }}>{item.char}</span>
+                {item.weapon && (
+                  <span style={{
+                    color: equippedWeaponId === item.weapon.id ? COLORS.doorOpen : COLORS.modeVisual,
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                  }}>
+                    {equippedWeaponId === item.weapon.id ? '[E]' : '[W]'}
+                  </span>
+                )}
                 <span>{item.name}</span>
-                {item.count > 1 && (
+                {item.weapon && item.weapon.ammoType === 'ammo' ? (
+                  <span style={{ color: COLORS.textDim }}>x{item.count}</span>
+                ) : item.count > 1 && (
                   <span style={{ color: COLORS.textDim }}>x{item.count}</span>
                 )}
                 {item.quickSlot && (
@@ -128,7 +140,7 @@ export function InventoryScreen() {
             fontSize: '11px',
           }}
         >
-          j/k navigate | 1-3 assign quick slot | Esc/:q close
+          j/k navigate | e equip weapon | 1-3 quick slot | Esc/:q close
         </div>
       </div>
     </div>
