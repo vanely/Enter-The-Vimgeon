@@ -23,7 +23,7 @@ function isSignChar(char: string): boolean {
 }
 
 function isBracketChar(char: string): boolean {
-  return char === '(' || char === ')' || char === '{' || char === '}';
+  return char === '(' || char === ')' || char === '{' || char === '}' || char === '[' || char === ']';
 }
 
 function isWalkable(char: string): boolean {
@@ -33,6 +33,13 @@ function isWalkable(char: string): boolean {
   if (char >= 'A' && char <= 'Z') return true;
   if (char >= 'a' && char <= 'z') return true;
   return false;
+}
+
+function containerKindLabel(bracketType: string): string {
+  if (bracketType === '(') return 'barrel';
+  if (bracketType === '{') return 'chest';
+  if (bracketType === '[') return 'locker';
+  return 'container';
 }
 
 function isDoorChar(char: string): boolean {
@@ -139,7 +146,10 @@ function renderCombatEntities(
     const { x, y } = container.pos;
     if (y < 0 || y >= grid.length) continue;
     if (!container.opened) {
-      const [lChar, rChar] = container.bracketType === '(' ? ['(', ')'] : ['{', '}'];
+      const [lChar, rChar] =
+        container.bracketType === '(' ? ['(', ')'] :
+          container.bracketType === '[' ? ['[', ']'] :
+            ['{', '}'];
       if (x - 1 >= 0 && x - 1 < grid[0].length)
         grid[y][x - 1] = createCell(lChar, COLORS.barrel, undefined, true);
       if (x >= 0 && x < grid[0].length)
@@ -330,12 +340,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   equippedItemId: null,
   weaponCooldown: 0,
   lightPuzzleSolved: false,
+  hasDemoedHelpMenu: false,
 
   setMode: (mode) => set({ mode }),
 
   movePlayer: (dx, dy) => {
     const state = get();
-    if (state.mode !== 'NORMAL' || state.helpOpen || state.signPopup || state.playerDead) return;
+    if ((state.mode !== 'NORMAL' && state.mode !== 'INSERT') || state.helpOpen || state.signPopup || state.playerDead) return;
 
     set({ playerDir: { dx, dy } });
 
@@ -354,7 +365,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (isDoorChar(targetChar) && isRegisteredDoor) {
       const door = checkDoorCollision({ x: newX, y: newY }, room.doors);
 
-      if (door && !door.open && door.gateCondition === 'reach') {
+      if (door && !door.open && door.gateCondition === 'help_then_reach' && !state.hasDemoedHelpMenu) {
+        get().addMessage('The exit stays shut until you open :help (type : help then Enter).', COLORS.textDim);
+        return;
+      }
+
+      if (
+        door && !door.open &&
+        (door.gateCondition === 'reach' ||
+          (door.gateCondition === 'help_then_reach' && state.hasDemoedHelpMenu))
+      ) {
         const newDoorStates = new Map(state.doorStates);
         for (let i = 0; i < door.chars.length; i++) {
           newDoorStates.set(doorKey({ x: door.pos.x + i, y: door.pos.y }), true);
@@ -547,6 +567,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       weaponCooldown: 0,
       lightPuzzleSolved: false,
       playerHP: get().playerMaxHP,
+      hasDemoedHelpMenu: false,
     });
   },
 
@@ -569,6 +590,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         mode: 'NORMAL',
         commandBuffer: '',
         pendingKey: null,
+        hasDemoedHelpMenu: true,
       });
       get().addMessage('Opening :help...', COLORS.signText);
       return;
@@ -729,7 +751,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     );
 
     if (!container) {
-      get().addMessage(`No nearby ${bracketType === '(' ? 'barrel' : 'chest'} to open.`, COLORS.textDim);
+      get().addMessage(`No nearby ${containerKindLabel(bracketType)} to open.`, COLORS.textDim);
       set({ mode: 'NORMAL', pendingVisualInner: null });
       return;
     }
@@ -747,7 +769,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const weapon = lookupWeapon(invId);
     const consumable = lookupConsumable(invId);
     get().addInventoryItem(invId, item.name, item.char, weapon, consumable);
-    get().addMessage(`Yanked: ${item.name} from ${bracketType === '(' ? 'barrel' : 'chest'}!`, COLORS.keyItem);
+    get().addMessage(`Yanked: ${item.name} from ${containerKindLabel(bracketType)}!`, COLORS.keyItem);
     get().rerenderGrid();
   },
 

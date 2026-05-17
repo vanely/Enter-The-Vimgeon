@@ -56,7 +56,8 @@ export function HUD() {
 
   let pendingDisplay: string | null = null;
   if (pendingVisualInner === 'i') pendingDisplay = 'vi_';
-  else if (pendingVisualInner === '(' || pendingVisualInner === '{') {
+  else if (pendingVisualInner === 'iw') pendingDisplay = 'viw_';
+  else if (pendingVisualInner === '(' || pendingVisualInner === '{' || pendingVisualInner === '[') {
     pendingDisplay = `vi${pendingVisualInner}_`;
   }
   if (pendingKey === 'g') {

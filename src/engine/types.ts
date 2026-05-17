@@ -49,7 +49,7 @@ export interface Container {
   pos: Position;
   char: string;
   openChar: string;
-  bracketType: '(' | '{';
+  bracketType: '(' | '{' | '[';
   item: KeyItem;
   opened: boolean;
 }
@@ -180,6 +180,8 @@ export interface GameState {
   equippedItemId: string | null;
   weaponCooldown: number;
   lightPuzzleSolved: boolean;
+  /** Set when :help is run once (tutorial help gate). */
+  hasDemoedHelpMenu: boolean;
 
   setMode: (mode: VimMode) => void;
   movePlayer: (dx: number, dy: number) => void;

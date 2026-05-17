@@ -42,7 +42,9 @@ export function MessageLog() {
       )}
       {!nearbyItem && nearbyContainer && mode === 'NORMAL' && (
         <div style={{ color: COLORS.barrel, fontWeight: 'bold', marginBottom: '2px' }}>
-          &gt; [{nearbyContainer.bracketType === '(' ? 'Barrel' : 'Chest'}] Use <span style={{ color: COLORS.modeVisual }}>vi{nearbyContainer.bracketType}y</span> to loot (Shift required)
+          &gt; [{nearbyContainer.bracketType === '(' ? 'Barrel' : nearbyContainer.bracketType === '[' ? 'Locker' : 'Chest'}] Use{' '}
+          <span style={{ color: COLORS.modeVisual }}>vi{nearbyContainer.bracketType}y</span> to loot
+          {nearbyContainer.bracketType === '(' ? ' (Shift+9 for opening paren)' : ''}
         </div>
       )}
       {recentMessages.map((msg, i) => (

@@ -32,7 +32,7 @@ const moveState: MoveRepeatState = {
 
 function tickMovement() {
   const state = useGameStore.getState();
-  if (!moveState.direction || state.mode !== 'NORMAL' || state.helpOpen || state.signPopup || state.playerDead) {
+  if (!moveState.direction || (state.mode !== 'NORMAL' && state.mode !== 'INSERT') || state.helpOpen || state.signPopup || state.playerDead) {
     stopMovement();
     return;
   }
@@ -121,6 +121,11 @@ export function handleKeyDown(e: KeyboardEvent): void {
     return;
   }
 
+  if (state.mode === 'INSERT') {
+    handleInsertInput(e, state);
+    return;
+  }
+
   if (state.mode === 'NORMAL') {
     handleNormalInput(e, state);
     return;
@@ -170,6 +175,14 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
   }
 
   switch (key) {
+    case 'i':
+      e.preventDefault();
+      stopMovement();
+      clearPendingChordTimer();
+      useGameStore.setState({ pendingKey: null });
+      state.setMode('INSERT');
+      state.updateLastInputTime();
+      break;
     case 'x':
       e.preventDefault();
       stopMovement();
@@ -445,7 +458,11 @@ function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
 
   if (state.pendingVisualInner === 'i') {
     e.preventDefault();
-    if (key === '(' || key === '9') {
+    if (key === 'w') {
+      state.setPendingVisualInner('iw');
+      armPendingChordTimer({ pendingVisualInner: 'iw' });
+      state.addMessage('viw -- press y to yank item under you', COLORS.modeVisual);
+    } else if (key === '(' || key === '9') {
       state.setPendingVisualInner('(');
       armPendingChordTimer({ pendingVisualInner: '(' });
       state.addMessage('vi( -- press y to yank from barrel', COLORS.modeVisual);
@@ -453,6 +470,10 @@ function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
       state.setPendingVisualInner('{');
       armPendingChordTimer({ pendingVisualInner: '{' });
       state.addMessage('vi{ -- press y to yank from chest', COLORS.modeVisual);
+    } else if (key === '[') {
+      state.setPendingVisualInner('[');
+      armPendingChordTimer({ pendingVisualInner: '[' });
+      state.addMessage('vi[ -- press y to yank from locker', COLORS.modeVisual);
     } else {
       clearPendingChordTimer();
       state.setPendingVisualInner(null);
@@ -462,7 +483,20 @@ function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     return;
   }
 
-  if (state.pendingVisualInner === '(' || state.pendingVisualInner === '{') {
+  if (state.pendingVisualInner === 'iw') {
+    e.preventDefault();
+    if (key === 'y') {
+      state.yankItem();
+    } else {
+      clearPendingChordTimer();
+      state.setPendingVisualInner(null);
+      state.addMessage('Cancelled.', COLORS.textDim);
+    }
+    state.updateLastInputTime();
+    return;
+  }
+
+  if (state.pendingVisualInner === '(' || state.pendingVisualInner === '{' || state.pendingVisualInner === '[') {
     e.preventDefault();
     if (key === 'y') {
       state.yankFromContainer(state.pendingVisualInner);
@@ -486,9 +520,39 @@ function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     e.preventDefault();
     state.setPendingVisualInner('i');
     armPendingChordTimer({ pendingVisualInner: 'i' });
-    state.addMessage('vi_ -- select bracket type: ( for barrel, { for chest', COLORS.modeVisual);
+    state.addMessage('vi_ -- w inner word, ( barrel, { chest, [ locker', COLORS.modeVisual);
     state.updateLastInputTime();
     return;
+  }
+}
+
+function handleInsertInput(e: KeyboardEvent, state: ReturnType<typeof useGameStore.getState>): void {
+  const key = e.key;
+
+  if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
+
+  if (key in MOVE_KEYS) {
+    e.preventDefault();
+    startMovement(key, MOVE_KEYS[key]);
+    return;
+  }
+
+  switch (key) {
+    case 'Escape':
+      e.preventDefault();
+      stopMovement();
+      state.setMode('NORMAL');
+      state.updateLastInputTime();
+      break;
+    case ':':
+      e.preventDefault();
+      stopMovement();
+      state.setMode('COMMAND');
+      state.setCommandBuffer('');
+      state.updateLastInputTime();
+      break;
+    default:
+      break;
   }
 }
 
