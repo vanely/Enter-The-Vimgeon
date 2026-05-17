@@ -1,13 +1,17 @@
 import type { RoomTemplate } from '../../engine/types';
+import { createEnemy } from '../enemies';
+import { keyItemAt } from '../items';
 
 const ROOM_W = 42;
 const ROOM_H = 16;
+
+export { ROOM_W, ROOM_H };
 
 function padLine(line: string, width: number): string {
   return line.padEnd(width).slice(0, width);
 }
 
-function makeLayout(lines: string[], width: number, height: number): string[] {
+export function makeLayout(lines: string[], width: number, height: number): string[] {
   const result: string[] = [];
   for (let i = 0; i < height; i++) {
     result.push(padLine(lines[i] || '', width));
@@ -123,13 +127,7 @@ export const tutorialLevel1: RoomTemplate = {
     },
   ],
   keys: [
-    {
-      id: 'iron_key',
-      name: 'Iron Key',
-      pos: { x: 30, y: 10 },
-      char: '&',
-      collected: false,
-    },
+    keyItemAt('iron_key', { x: 30, y: 10 }),
   ],
   enemies: [],
   barrels: [],
@@ -201,7 +199,7 @@ export const tutorialLevel2: RoomTemplate = {
       char: 'O',
       openChar: 'o',
       bracketType: '(',
-      item: { id: 'health_potion', name: 'Health Potion', pos: { x: 20, y: 7 }, char: '!', collected: false },
+      item: keyItemAt('health_potion', { x: 20, y: 7 }),
       opened: false,
     },
     {
@@ -210,7 +208,7 @@ export const tutorialLevel2: RoomTemplate = {
       char: 'X',
       openChar: 'x',
       bracketType: '{',
-      item: { id: 'silver_key', name: 'Silver Key', pos: { x: 30, y: 7 }, char: '&', collected: false },
+      item: keyItemAt('silver_key', { x: 30, y: 7 }),
       opened: false,
     },
   ],
@@ -276,30 +274,10 @@ export const tutorialLevel3: RoomTemplate = {
     },
   ],
   keys: [
-    {
-      id: 'sling',
-      name: 'Sling',
-      pos: { x: 10, y: 6 },
-      char: '~',
-      collected: false,
-    },
+    keyItemAt('sling', { x: 10, y: 6 }),
   ],
   enemies: [
-    {
-      id: 'goblin1',
-      name: 'Goblin Grunt',
-      pos: { x: 30, y: 7 },
-      hp: 3,
-      maxHp: 3,
-      chars: ['g'],
-      ai: 'chase',
-      damage: 1,
-      shootCooldown: 0,
-      ticksSinceShot: 0,
-      moveSpeed: 4,
-      ticksSinceMove: 0,
-      dead: false,
-    },
+    createEnemy('goblin_grunt', 'goblin1', { x: 30, y: 7 }),
   ],
   barrels: [],
   containers: [],
@@ -363,21 +341,7 @@ export const tutorialLevel4: RoomTemplate = {
   ],
   keys: [],
   enemies: [
-    {
-      id: 'slime1',
-      name: 'Slime',
-      pos: { x: 35, y: 7 },
-      hp: 2,
-      maxHp: 2,
-      chars: ['s'],
-      ai: 'shoot',
-      damage: 1,
-      shootCooldown: 6,
-      ticksSinceShot: 0,
-      moveSpeed: 8,
-      ticksSinceMove: 0,
-      dead: false,
-    },
+    createEnemy('slime', 'slime1', { x: 35, y: 7 }),
   ],
   barrels: [
     { pos: { x: 20, y: 5 }, destroyed: false, explosionFrame: -1 },
@@ -390,7 +354,7 @@ export const tutorialLevel4: RoomTemplate = {
       char: 'O',
       openChar: 'o',
       bracketType: '(',
-      item: { id: 'crossbow', name: 'Crossbow', pos: { x: 10, y: 8 }, char: 'T', collected: false },
+      item: keyItemAt('crossbow', { x: 10, y: 8 }),
       opened: false,
     },
   ],
@@ -418,9 +382,18 @@ export const tutorialComplete: RoomTemplate = {
     '|........................................|',
     '|........................................|',
     '|........................................|',
-    '+----------------------------------------+',
+    '+-------------------||-------------------+',
+    '                                          ',
   ], ROOM_W, ROOM_H),
-  doors: [],
+  doors: [
+    {
+      pos: { x: 20, y: 14 },
+      open: false,
+      gateCondition: 'reach',
+      targetLevel: 6,
+      chars: ['|', '|'],
+    },
+  ],
   signs: [
     {
       pos: { x: 3, y: 6 },
@@ -433,9 +406,11 @@ export const tutorialComplete: RoomTemplate = {
         '  - vi(y / vi{y          ',
         '    container pickups    ',
         '  - x melee, d ranged   ',
+        '  - gg consumables       ',
         '  - % dodge, Ctrl-d/u   ',
         '  - : commands           ',
-        '  - :equip weapons       ',
+        '  - :equip / :inv (e)   ',
+        '  - p paste (drop) item  ',
         '',
         '  The dungeon awaits...  ',
         '  (end of current build) ',

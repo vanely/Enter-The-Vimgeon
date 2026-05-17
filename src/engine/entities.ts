@@ -20,6 +20,17 @@ export interface EnemyTickResult {
   contactDamage: number;
 }
 
+function pickChaseStep(
+  enemyPos: Position,
+  playerPos: Position,
+  preRowMovesRemaining: number,
+): { dx: number; dy: number } {
+  if (preRowMovesRemaining <= 0 || enemyPos.x === playerPos.x) {
+    return directionToward(enemyPos, playerPos);
+  }
+  return { dx: playerPos.x > enemyPos.x ? 1 : -1, dy: 0 };
+}
+
 export function tickEnemies(
   enemies: Enemy[],
   room: RoomTemplate,
@@ -46,13 +57,26 @@ export function tickEnemies(
 
     if (shouldMove && updated.ticksSinceMove >= updated.moveSpeed) {
       updated.ticksSinceMove = 0;
-      const dir = directionToward(updated.pos, playerPos);
-      const newPos = { x: updated.pos.x + dir.dx, y: updated.pos.y + dir.dy };
+      const preRowLeft = updated.preRowMovesRemaining ?? 0;
+      let dir = pickChaseStep(updated.pos, playerPos, preRowLeft);
+      let newPos = { x: updated.pos.x + dir.dx, y: updated.pos.y + dir.dy };
 
       if (newPos.x === playerPos.x && newPos.y === playerPos.y) {
         result.contactDamage += updated.damage;
       } else if (canMoveTo(newPos, room, enemies, playerPos)) {
         updated.pos = newPos;
+        if (preRowLeft > 0) {
+          updated.preRowMovesRemaining = preRowLeft - 1;
+        }
+      } else if (preRowLeft > 0 && updated.pos.x !== playerPos.x) {
+        dir = directionToward(updated.pos, playerPos);
+        newPos = { x: updated.pos.x + dir.dx, y: updated.pos.y + dir.dy };
+        if (newPos.x === playerPos.x && newPos.y === playerPos.y) {
+          result.contactDamage += updated.damage;
+        } else if (canMoveTo(newPos, room, enemies, playerPos)) {
+          updated.pos = newPos;
+          updated.preRowMovesRemaining = preRowLeft - 1;
+        }
       }
     }
 

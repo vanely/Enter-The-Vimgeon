@@ -23,6 +23,10 @@ export default function App() {
   const enemies = useGameStore((s) => s.enemies);
   const projectiles = useGameStore((s) => s.projectiles);
   const playerDead = useGameStore((s) => s.playerDead);
+  const currentRoom = useGameStore((s) => s.currentRoom);
+  const hasLightPulse = useGameStore((s) =>
+    s.projectiles.some((p) => p.owner === 'light'),
+  );
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -49,8 +53,9 @@ export default function App() {
   useEffect(() => {
     const hasActiveEnemies = enemies.some((e) => !e.dead);
     const hasProjectiles = projectiles.length > 0;
+    const lightPuzzleActive = Boolean(currentRoom?.lightPuzzle && hasLightPulse);
 
-    if ((hasActiveEnemies || hasProjectiles) && !playerDead) {
+    if ((hasActiveEnemies || hasProjectiles || lightPuzzleActive) && !playerDead) {
       startLoop();
     } else {
       stopLoop();
@@ -59,7 +64,7 @@ export default function App() {
     return () => {
       stopLoop();
     };
-  }, [enemies, projectiles, playerDead]);
+  }, [enemies, projectiles, playerDead, currentRoom, hasLightPulse]);
 
   if (!gameStarted) {
     return <TitleScreen />;

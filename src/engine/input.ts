@@ -1,4 +1,4 @@
-import { useGameStore } from './gameState';
+import { useGameStore, armPendingChordTimer, clearPendingChordTimer } from './gameState';
 import { meleeStrike, repeatShot, findDodgeTarget, applyBarrelExplosion } from './combat';
 import { COLORS } from '../utils/colors';
 
@@ -138,6 +138,20 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
 
   if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
 
+  if (state.pendingKey === 'g') {
+    if (key === 'g') {
+      e.preventDefault();
+      stopMovement();
+      clearPendingChordTimer();
+      useGameStore.setState({ pendingKey: null });
+      handleConsumeEquipped(state);
+      state.updateLastInputTime();
+      return;
+    }
+    clearPendingChordTimer();
+    useGameStore.setState({ pendingKey: null });
+  }
+
   if (key in MOVE_KEYS) {
     e.preventDefault();
     startMovement(key, MOVE_KEYS[key]);
@@ -165,7 +179,20 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     case 'd':
       e.preventDefault();
       stopMovement();
-      handleShoot(state);
+      handleWeaponFire(state);
+      state.updateLastInputTime();
+      break;
+    case 'g':
+      e.preventDefault();
+      stopMovement();
+      useGameStore.setState({ pendingKey: 'g' });
+      armPendingChordTimer({ pendingKey: 'g' });
+      state.updateLastInputTime();
+      break;
+    case 'p':
+      e.preventDefault();
+      stopMovement();
+      state.dropEquippedItem();
       state.updateLastInputTime();
       break;
     case '%':
@@ -177,6 +204,8 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     case 'v': {
       e.preventDefault();
       stopMovement();
+      clearPendingChordTimer();
+      useGameStore.setState({ pendingKey: null });
       const nearbyContainer = state.containers.find(
         (c) => !c.opened &&
           Math.abs(c.pos.x - state.playerPos.x) <= 2 &&
@@ -193,6 +222,8 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     case ':':
       e.preventDefault();
       stopMovement();
+      clearPendingChordTimer();
+      useGameStore.setState({ pendingKey: null });
       state.setMode('COMMAND');
       state.setCommandBuffer('');
       state.updateLastInputTime();
@@ -200,6 +231,8 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     case 'Escape':
       e.preventDefault();
       stopMovement();
+      clearPendingChordTimer();
+      useGameStore.setState({ pendingKey: null });
       state.setMode('NORMAL');
       state.updateLastInputTime();
       break;
@@ -243,16 +276,86 @@ function handleMelee(state: ReturnType<typeof useGameStore.getState>): void {
   useGameStore.getState().rerenderGrid();
 }
 
-function handleShoot(state: ReturnType<typeof useGameStore.getState>): void {
-  const weaponId = state.equippedWeaponId;
-  if (!weaponId) {
-    state.addMessage('No weapon equipped. Pick one up and use :equip', COLORS.textDim);
+function handleConsumeEquipped(state: ReturnType<typeof useGameStore.getState>): void {
+  const equippedId = state.equippedItemId;
+  if (!equippedId) {
+    state.addMessage('No item equipped.', COLORS.textDim);
     return;
   }
 
-  const item = state.inventoryItems.find((i) => i.weapon && i.weapon.id === weaponId);
-  if (!item || !item.weapon) {
-    state.addMessage('Equipped weapon not found in inventory.', COLORS.textDim);
+  const item = state.inventoryItems.find((i) => i.id === equippedId);
+  if (!item) {
+    useGameStore.setState({ equippedItemId: null });
+    state.addMessage('Equipped item not found in inventory.', COLORS.textDim);
+    return;
+  }
+
+  if (!item.consumable) {
+    state.addMessage('gg consumes equipped potions and food. Use d to fire a weapon.', COLORS.textDim);
+    return;
+  }
+
+  if (item.count <= 0) {
+    useGameStore.setState({ equippedItemId: null });
+    state.addMessage('Nothing left to use.', COLORS.textDim);
+    return;
+  }
+
+  const heal = item.consumable.healHp;
+  const newHP = Math.min(state.playerMaxHP, state.playerHP + heal);
+  const healed = newHP - state.playerHP;
+
+  let nextItems;
+  if (item.count <= 1) {
+    nextItems = state.inventoryItems.filter((i) => i.id !== item.id);
+    const idx = state.inventory.indexOf(item.id);
+    const nextInv = idx === -1
+      ? state.inventory
+      : [...state.inventory.slice(0, idx), ...state.inventory.slice(idx + 1)];
+    useGameStore.setState({
+      playerHP: newHP,
+      inventoryItems: nextItems,
+      inventory: nextInv,
+      equippedItemId: null,
+    });
+  } else {
+    nextItems = state.inventoryItems.map((i) =>
+      i.id === item.id ? { ...i, count: i.count - 1 } : i
+    );
+    useGameStore.setState({
+      playerHP: newHP,
+      inventoryItems: nextItems,
+    });
+  }
+
+  state.addMessage(
+    healed > 0 ? `Used ${item.name}. +${healed} HP (${newHP}/${state.playerMaxHP})` : `Used ${item.name}. (already at full HP)`,
+    COLORS.doorOpen,
+  );
+  useGameStore.getState().rerenderGrid();
+}
+
+function handleWeaponFire(state: ReturnType<typeof useGameStore.getState>): void {
+  const equippedId = state.equippedItemId;
+  if (!equippedId) {
+    state.addMessage('No weapon equipped. Open :inv and press e, or use :equip', COLORS.textDim);
+    return;
+  }
+
+  const item = state.inventoryItems.find((i) => i.id === equippedId);
+  if (!item) {
+    useGameStore.setState({ equippedItemId: null });
+    state.addMessage('Equipped item not found in inventory.', COLORS.textDim);
+    return;
+  }
+
+  if (item.consumable) {
+    state.addMessage('Consumables are used with gg. Equip a weapon and press d to shoot.', COLORS.textDim);
+    return;
+  }
+
+  if (!item.weapon) {
+    state.addMessage('That item cannot be fired. Equip a weapon for d, or a potion for gg.', COLORS.textDim);
     return;
   }
 
@@ -333,6 +436,7 @@ function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
 
   if (key === 'Escape') {
     e.preventDefault();
+    clearPendingChordTimer();
     state.setMode('NORMAL');
     state.setPendingVisualInner(null);
     state.updateLastInputTime();
@@ -343,11 +447,14 @@ function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     e.preventDefault();
     if (key === '(' || key === '9') {
       state.setPendingVisualInner('(');
+      armPendingChordTimer({ pendingVisualInner: '(' });
       state.addMessage('vi( -- press y to yank from barrel', COLORS.modeVisual);
     } else if (key === '{') {
       state.setPendingVisualInner('{');
+      armPendingChordTimer({ pendingVisualInner: '{' });
       state.addMessage('vi{ -- press y to yank from chest', COLORS.modeVisual);
     } else {
+      clearPendingChordTimer();
       state.setPendingVisualInner(null);
       state.addMessage('Invalid inner selection.', COLORS.textDim);
     }
@@ -360,6 +467,7 @@ function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     if (key === 'y') {
       state.yankFromContainer(state.pendingVisualInner);
     } else {
+      clearPendingChordTimer();
       state.setPendingVisualInner(null);
       state.addMessage('Cancelled.', COLORS.textDim);
     }
@@ -377,6 +485,7 @@ function handleVisualInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
   if (key === 'i') {
     e.preventDefault();
     state.setPendingVisualInner('i');
+    armPendingChordTimer({ pendingVisualInner: 'i' });
     state.addMessage('vi_ -- select bracket type: ( for barrel, { for chest', COLORS.modeVisual);
     state.updateLastInputTime();
     return;
@@ -457,10 +566,10 @@ function handleInventoryInput(e: KeyboardEvent, state: ReturnType<typeof useGame
 
   if (key === 'e') {
     const item = state.inventoryItems[state.inventoryCursor];
-    if (item && item.weapon) {
-      state.equipWeapon(item.id);
+    if (item && (item.weapon || item.consumable)) {
+      state.equipItem(item.id);
     } else if (item) {
-      state.addMessage('That item is not a weapon.', COLORS.textDim);
+      state.addMessage('That item cannot be equipped.', COLORS.textDim);
     }
     return;
   }

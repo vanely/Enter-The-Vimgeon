@@ -1,4 +1,5 @@
-import type { Position, Projectile, Enemy, Barrel, RoomTemplate } from './types';
+import type { Position, Projectile, Enemy, Barrel, RoomTemplate, LightPuzzleConfig } from './types';
+import { cellAllowsLight, reflectMirror } from './lightPuzzle';
 
 let nextProjectileId = 1;
 
@@ -61,6 +62,8 @@ export function advanceProjectiles(
   };
 
   for (const proj of projectiles) {
+    if (proj.owner === 'light') continue;
+
     const nx = proj.pos.x + proj.dx;
     const ny = proj.pos.y + proj.dy;
 
@@ -111,4 +114,61 @@ export function scanForChar(
     }
   }
   return null;
+}
+
+export function createLightPulse(cfg: LightPuzzleConfig): Projectile {
+  return {
+    id: nextProjectileId++,
+    pos: { ...cfg.source },
+    dx: cfg.sourceDir.dx,
+    dy: cfg.sourceDir.dy,
+    char: '*',
+    owner: 'light',
+    damage: 0,
+  };
+}
+
+export interface LightPulseAdvanceResult {
+  pulse: Projectile;
+  solved: boolean;
+  solvedJustNow: boolean;
+}
+
+/** One tick of light travel: same cell-step model as combat projectiles; mirrors bend direction. */
+export function advanceLightPulse(
+  pulse: Projectile,
+  room: RoomTemplate,
+  cfg: LightPuzzleConfig,
+  doorStates: Map<string, boolean>,
+  alreadySolved: boolean,
+): LightPulseAdvanceResult {
+  const nx = pulse.pos.x + pulse.dx;
+  const ny = pulse.pos.y + pulse.dy;
+
+  if (!cellAllowsLight(room, nx, ny, doorStates)) {
+    return {
+      pulse: createLightPulse(cfg),
+      solved: alreadySolved,
+      solvedJustNow: false,
+    };
+  }
+
+  const ch = room.layout[ny]?.[nx] ?? ' ';
+  let newDx = pulse.dx;
+  let newDy = pulse.dy;
+  const newPos = { x: nx, y: ny };
+  if (ch === '/' || ch === '\\') {
+    const r = reflectMirror(ch, pulse.dx, pulse.dy);
+    newDx = r.dx;
+    newDy = r.dy;
+  }
+
+  const hitReceptor = nx === cfg.receptor.x && ny === cfg.receptor.y;
+  const solvedJustNow = hitReceptor && !alreadySolved;
+
+  return {
+    pulse: { ...pulse, pos: newPos, dx: newDx, dy: newDy },
+    solved: alreadySolved || hitReceptor,
+    solvedJustNow,
+  };
 }

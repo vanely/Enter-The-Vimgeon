@@ -37,4 +37,6 @@ export const COLORS = {
   deathBg: 'rgba(127, 29, 29, 0.9)',
   deathText: '#fca5a5',
   pendingKey: '#60a5fa',
+  lightBeam: '#fde047',
+  lightBeamHead: '#fef9c3',
 } as const;

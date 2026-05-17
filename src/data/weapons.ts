@@ -3,8 +3,8 @@ import type { Weapon } from '../engine/types';
 /*
  * WEAPON DESIGN SPEC
  *
- * Each weapon defines a ranged attack fired with 'd' (delete/destroy).
- * Weapons must be picked up (vy or vi(y/vi{y) and equipped (:equip <id> or 'e' in inventory).
+ * Each weapon defines a ranged attack fired with 'd' (delete/destroy) when that weapon
+ * is the equipped item. Pick up with vy or vi(y/vi{y, then :equip <id> or e in :inv.
  *
  * ammoType:
  *   'ammo'     — finite shots. count field on InventoryItem tracks remaining ammo.

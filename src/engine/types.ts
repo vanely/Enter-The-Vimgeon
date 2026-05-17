@@ -15,7 +15,7 @@ export interface Projectile {
   dx: number;
   dy: number;
   char: string;
-  owner: 'player' | 'enemy';
+  owner: 'player' | 'enemy' | 'light';
   damage: number;
 }
 
@@ -33,6 +33,8 @@ export interface Enemy {
   moveSpeed: number;
   ticksSinceMove: number;
   dead: boolean;
+  /** Chase moves (1–4) before prioritizing the player's row; set on spawn in loadLevel. */
+  preRowMovesRemaining?: number;
 }
 
 export interface Barrel {
@@ -67,12 +69,23 @@ export interface KeyItem {
   pos: Position;
   char: string;
   collected: boolean;
+  /** When set, yanking this pickup merges into inventory under this id (stack id). */
+  pickupInventoryId?: string;
 }
 
 export interface Sign {
   pos: Position;
   text: string[];
   char?: string;
+}
+
+export interface LightPuzzleConfig {
+  /** Emitter cell (layout should contain `S` here). */
+  source: Position;
+  /** Initial beam direction (unit vector). */
+  sourceDir: { dx: number; dy: number };
+  /** Sensor cell (layout `R`); hitting it opens doors with gateCondition `light_puzzle`. */
+  receptor: Position;
 }
 
 export interface RoomTemplate {
@@ -89,6 +102,8 @@ export interface RoomTemplate {
   name: string;
   hintText?: string;
   hintDelay?: number;
+  /** When set, a `projectiles` entry with `owner: 'light'` is spawned; mirrors `/` `\\` bend it (see projectiles.ts). */
+  lightPuzzle?: LightPuzzleConfig;
 }
 
 export interface Weapon {
@@ -101,6 +116,11 @@ export interface Weapon {
   cooldownTicks: number;
 }
 
+/** Static effect data for stackable consumables (potions, food, etc.). */
+export interface ConsumableSpec {
+  healHp: number;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -108,6 +128,7 @@ export interface InventoryItem {
   count: number;
   quickSlot: number | null;
   weapon?: Weapon;
+  consumable?: ConsumableSpec;
 }
 
 export interface Message {
@@ -155,8 +176,10 @@ export interface GameState {
   pendingKey: string | null;
   pendingVisualInner: string | null;
   playerDead: boolean;
-  equippedWeaponId: string | null;
+  /** Inventory row id of equipped weapon or consumable (gg / d / p). */
+  equippedItemId: string | null;
   weaponCooldown: number;
+  lightPuzzleSolved: boolean;
 
   setMode: (mode: VimMode) => void;
   movePlayer: (dx: number, dy: number) => void;
@@ -191,6 +214,13 @@ export interface GameState {
   toggleInventory: () => void;
   setInventoryCursor: (cursor: number) => void;
   assignQuickSlot: (itemIndex: number, slot: number) => void;
-  addInventoryItem: (id: string, name: string, char: string, weapon?: Weapon) => void;
-  equipWeapon: (itemId: string) => void;
+  addInventoryItem: (
+    id: string,
+    name: string,
+    char: string,
+    weapon?: Weapon,
+    consumable?: ConsumableSpec,
+  ) => void;
+  equipItem: (itemId: string) => void;
+  dropEquippedItem: () => void;
 }

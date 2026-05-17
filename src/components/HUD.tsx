@@ -48,8 +48,9 @@ export function HUD() {
   const maxMP = useGameStore((s) => s.playerMaxMP);
   const currentLevel = useGameStore((s) => s.currentLevel);
   const pendingVisualInner = useGameStore((s) => s.pendingVisualInner);
+  const pendingKey = useGameStore((s) => s.pendingKey);
   const playerDir = useGameStore((s) => s.playerDir);
-  const equippedWeaponId = useGameStore((s) => s.equippedWeaponId);
+  const equippedItemId = useGameStore((s) => s.equippedItemId);
   const inventoryItems = useGameStore((s) => s.inventoryItems);
   const weaponCooldown = useGameStore((s) => s.weaponCooldown);
 
@@ -58,16 +59,21 @@ export function HUD() {
   else if (pendingVisualInner === '(' || pendingVisualInner === '{') {
     pendingDisplay = `vi${pendingVisualInner}_`;
   }
+  if (pendingKey === 'g') {
+    pendingDisplay = pendingDisplay ? `${pendingDisplay} g_` : 'g_';
+  }
 
   const dirArrow = playerDir.dx === 1 ? '>' : playerDir.dx === -1 ? '<' : playerDir.dy === 1 ? 'v' : '^';
 
   let weaponDisplay: string | null = null;
-  if (equippedWeaponId) {
-    const item = inventoryItems.find((i) => i.weapon && i.weapon.id === equippedWeaponId);
-    if (item && item.weapon) {
+  if (equippedItemId) {
+    const item = inventoryItems.find((i) => i.id === equippedItemId);
+    if (item?.weapon) {
       const w = item.weapon;
       const status = w.ammoType === 'ammo' ? `${item.count}` : (weaponCooldown > 0 ? `CD:${weaponCooldown}` : 'RDY');
       weaponDisplay = `${w.projectileChar} ${w.name} ${status}`;
+    } else if (item?.consumable) {
+      weaponDisplay = `${item.char} ${item.name} x${item.count}`;
     }
   }
 
