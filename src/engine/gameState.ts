@@ -6,7 +6,9 @@ import type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, Gam
 import type { EnemyAI } from './types';
 import { WEAPONS } from '../data/weapons';
 import { createLightPulse } from './projectiles';
-import { lookupConsumable } from '../data/items';
+import { FLASH_STEP_CHARGES_PER_PICKUP, lookupConsumable } from '../data/items';
+import { doorCellAt } from './doorGeometry';
+import { terrainBlocksMovement } from './collision';
 
 export type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem, Weapon, ConsumableSpec, EnemyAI };
 
@@ -29,7 +31,7 @@ function isBracketChar(char: string): boolean {
 function isWalkable(char: string): boolean {
   if (char === '.' || char === ' ' || char === '@' || isSignChar(char) || isBracketChar(char)) return true;
   if (char === '/' || char === '\\' || char === `'` || char === 'R' || char === 'S') return true;
-  if (char === '~' || char === '&' || char === '!' || char === '*' || char === 'T') return true;
+  if (char === '~' || char === '&' || char === '!' || char === 'T') return true;
   if (char >= 'A' && char <= 'Z') return true;
   if (char >= 'a' && char <= 'z') return true;
   return false;
@@ -258,9 +260,8 @@ function checkSignCollision(pos: Position, signs: Sign[], layout: string[]): Sig
 function checkDoorCollision(pos: Position, doors: Door[]): Door | null {
   for (const door of doors) {
     for (let i = 0; i < door.chars.length; i++) {
-      const dy = door.pos.y;
-      const dx = door.pos.x + i;
-      if (dx === pos.x && dy === pos.y) {
+      const p = doorCellAt(door, i);
+      if (p.x === pos.x && p.y === pos.y) {
         return door;
       }
     }
@@ -377,7 +378,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       ) {
         const newDoorStates = new Map(state.doorStates);
         for (let i = 0; i < door.chars.length; i++) {
-          newDoorStates.set(doorKey({ x: door.pos.x + i, y: door.pos.y }), true);
+          newDoorStates.set(doorKey(doorCellAt(door, i)), true);
         }
         door.open = true;
         const newMessages = [...state.messages, {
@@ -412,6 +413,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         return;
       }
 
+      return;
+    }
+
+    const pickupAtDest = room.keys.some(
+      (k) => !k.collected && k.pos.x === newX && k.pos.y === newY,
+    );
+    if (!pickupAtDest && terrainBlocksMovement(targetChar, room)) {
       return;
     }
 
@@ -478,7 +486,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const doorStates = new Map<string, boolean>();
     for (const door of room.doors) {
       for (let i = 0; i < door.chars.length; i++) {
-        doorStates.set(doorKey({ x: door.pos.x + i, y: door.pos.y }), door.open);
+        doorStates.set(doorKey(doorCellAt(door, i)), door.open);
       }
     }
     set({
@@ -526,7 +534,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const doorStates = new Map<string, boolean>();
     for (const door of level.doors) {
       for (let i = 0; i < door.chars.length; i++) {
-        doorStates.set(doorKey({ x: door.pos.x + i, y: door.pos.y }), false);
+        doorStates.set(doorKey(doorCellAt(door, i)), false);
       }
     }
     const initialProjectiles = level.lightPuzzle ? [createLightPulse(level.lightPuzzle)] : [];
@@ -620,7 +628,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         const newDoorStates = new Map(state.doorStates);
         for (let i = 0; i < closedDoor.chars.length; i++) {
-          newDoorStates.set(doorKey({ x: closedDoor.pos.x + i, y: closedDoor.pos.y }), true);
+          newDoorStates.set(doorKey(doorCellAt(closedDoor, i)), true);
         }
         closedDoor.open = true;
 
@@ -733,6 +741,93 @@ export const useGameStore = create<GameState>((set, get) => ({
   setContainers: (containers) => set({ containers }),
   setProjectiles: (projectiles) => set({ projectiles }),
   setPendingKey: (key) => set({ pendingKey: key }),
+
+  tryFlashTeleport: (targetChar: string) => {
+    const state = get();
+    const room = state.currentRoom;
+    if (!room) return;
+    const flashItem = state.inventoryItems.find((i) => i.id === 'flash_step');
+    if (!flashItem || flashItem.count <= 0) {
+      get().addMessage(
+        'Collect a Flash Step (^) for charges — then f and a character to blink along your row.',
+        COLORS.textDim,
+      );
+      return;
+    }
+    const py = state.playerPos.y;
+    const px = state.playerPos.x;
+    const row = room.layout[py] || '';
+    let tx: number | null = null;
+    for (let x = px + 1; x < room.width; x++) {
+      if (row[x] === targetChar) {
+        tx = x;
+        break;
+      }
+    }
+    if (tx === null) {
+      for (let x = px - 1; x >= 0; x--) {
+        if (row[x] === targetChar) {
+          tx = x;
+          break;
+        }
+      }
+    }
+    if (tx === null) {
+      get().addMessage(`No '${targetChar}' on this row.`, COLORS.textDim);
+      return;
+    }
+    const newPos = { x: tx, y: py };
+    const enemyBlocking = state.enemies.some((e) => !e.dead && e.pos.x === tx && e.pos.y === py);
+    if (enemyBlocking) {
+      get().addMessage('Something occupies that spot.', COLORS.textDim);
+      return;
+    }
+    const barrelBlocking = state.barrels.some(
+      (b) => !b.destroyed && b.pos.y === py && tx >= b.pos.x - 1 && tx <= b.pos.x + 1,
+    );
+    if (barrelBlocking) {
+      get().addMessage('Something occupies that spot.', COLORS.textDim);
+      return;
+    }
+    const containerBlocking = state.containers.some(
+      (c) => !c.opened && c.pos.y === py && tx >= c.pos.x - 1 && tx <= c.pos.x + 1,
+    );
+    if (containerBlocking) {
+      get().addMessage('Something occupies that spot.', COLORS.textDim);
+      return;
+    }
+    const ch = row[tx] || ' ';
+    const dk = doorKey({ x: tx, y: py });
+    if (isDoorChar(ch) && state.doorStates.has(dk) && !state.doorStates.get(dk)) {
+      get().addMessage('A closed door blocks that spot.', COLORS.textDim);
+      return;
+    }
+    const sign = checkSignCollision(newPos, room.signs, room.layout);
+    const itemHere =
+      room.keys.find((k) => !k.collected && k.pos.x === newPos.x && k.pos.y === newPos.y) ?? null;
+    const nextCount = flashItem.count - 1;
+    const nextItems =
+      nextCount <= 0
+        ? state.inventoryItems.filter((i) => i.id !== 'flash_step')
+        : state.inventoryItems.map((i) => (i.id === 'flash_step' ? { ...i, count: nextCount } : i));
+    const nextInv =
+      nextCount <= 0 ? state.inventory.filter((id) => id !== 'flash_step') : state.inventory;
+    set({
+      playerPos: newPos,
+      renderedGrid: storeGrid(room, newPos, state.doorStates, get),
+      signPopup: sign ? sign.text : null,
+      nearbyItem: itemHere,
+      lastInputTime: Date.now(),
+      hintVisible: false,
+      inventoryItems: nextItems,
+      inventory: nextInv,
+    });
+    get().addMessage(
+      nextCount <= 0 ? 'Flash Step! (out of charges)' : `Flash Step! (${nextCount} left)`,
+      COLORS.accent,
+    );
+  },
+
   setPendingVisualInner: (key) => set({ pendingVisualInner: key }),
   setPlayerDead: (dead) => set({ playerDead: dead }),
   setPlayerInvincible: (ticks) => set({ playerInvincible: ticks }),
@@ -795,14 +890,21 @@ export const useGameStore = create<GameState>((set, get) => ({
     const state = get();
     const existing = state.inventoryItems.find((item) => item.id === id);
     if (existing) {
+      const delta = id === 'flash_step' ? FLASH_STEP_CHARGES_PER_PICKUP : 1;
       set({
         inventoryItems: state.inventoryItems.map((item) =>
-          item.id === id ? { ...item, count: item.count + 1 } : item
+          item.id === id ? { ...item, count: item.count + delta } : item
         ),
-        inventory: [...state.inventory, id],
+        inventory: state.inventory.includes(id) ? state.inventory : [...state.inventory, id],
       });
     } else {
-      const newItem: InventoryItem = { id, name, char, count: 1, quickSlot: null };
+      const newItem: InventoryItem = {
+        id,
+        name,
+        char,
+        count: id === 'flash_step' ? FLASH_STEP_CHARGES_PER_PICKUP : 1,
+        quickSlot: null,
+      };
       if (weapon) {
         newItem.weapon = weapon;
         newItem.count = weapon.maxAmmo ?? 1;

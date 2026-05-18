@@ -6,21 +6,21 @@ Brainstorming layouts, tutorials, puzzles, and how rooms connect into a run or o
 
 ### Tutorial track (loaded in game)
 
-These are exported from `src/data/rooms/tutorial.ts`, listed in order inside `tutorialLevels` (see ```495:503:src/data/rooms/tutorial.ts```). `loadLevel(n)` uses index `n` into that array.
+These are exported from `src/data/rooms/tutorial.ts`, listed in order inside `tutorialLevels` (see ```526:534:src/data/rooms/tutorial.ts```). `loadLevel(n)` uses index `n` into that array.
+
+Shared helpers: `ROOM_W` (80), `ROOM_H` (30), `ROOM_PAD_*`, `makeLayout`, `expandLegacyLayoutRows`, `padLine` (see top of `tutorial.ts`).
 
 Registration at startup: ```5:18:src/App.tsx``` (`tutorialLevels` → `initTutorialLevels`).
 
 | Index | Export | `name` (in-game banner) | Codebase reference |
 |-------|--------|-------------------------|--------------------|
-| 0 | `tutorialLevel0` | Tutorial: Awakening | ```22:76:src/data/rooms/tutorial.ts``` |
-| 1 | `tutorialLevel1` | Tutorial: The Locked Door | ```78:137:src/data/rooms/tutorial.ts``` |
-| 2 | `tutorialLevel2` | Tutorial: Containers | ```139:220:src/data/rooms/tutorial.ts``` |
-| 3 | `tutorialLevel3` | Tutorial: First Blood | ```222:289:src/data/rooms/tutorial.ts``` |
-| 4 | `tutorialLevel4` | Tutorial: Dodge & Cover | ```291:366:src/data/rooms/tutorial.ts``` |
-| 5 | `tutorialComplete` | Tutorial Complete! | ```368:430:src/data/rooms/tutorial.ts``` |
-| 6 | `tutorialLevelHelp` | Tutorial: The Help Scroll | ```432:493:src/data/rooms/tutorial.ts``` |
-
-Shared helpers in the same file: `ROOM_W`, `ROOM_H`, `makeLayout`, `padLine` (see top of `tutorial.ts`).
+| 0 | `tutorialLevel0` | Tutorial: Awakening | ```53:107:src/data/rooms/tutorial.ts``` |
+| 1 | `tutorialLevel1` | Tutorial: The Locked Door | ```109:168:src/data/rooms/tutorial.ts``` |
+| 2 | `tutorialLevel2` | Tutorial: Containers | ```170:251:src/data/rooms/tutorial.ts``` |
+| 3 | `tutorialLevel3` | Tutorial: First Blood | ```253:320:src/data/rooms/tutorial.ts``` |
+| 4 | `tutorialLevel4` | Tutorial: Dodge & Cover | ```322:397:src/data/rooms/tutorial.ts``` |
+| 5 | `tutorialComplete` | Tutorial Complete! | ```399:461:src/data/rooms/tutorial.ts``` |
+| 6 | `tutorialLevelHelp` | Tutorial: The Help Scroll | ```463:524:src/data/rooms/tutorial.ts``` |
 
 ### Puzzle rooms (not in tutorial loader)
 

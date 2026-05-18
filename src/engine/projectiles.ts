@@ -4,7 +4,7 @@ import { cellAllowsLight, reflectMirror } from './lightPuzzle';
 let nextProjectileId = 1;
 
 function isBlocking(char: string): boolean {
-  return char === '#' || char === '+' || char === '|' || char === '-';
+  return char === '#' || char === '+' || char === '|' || char === '-' || char === '*';
 }
 
 export function createProjectile(

@@ -143,6 +143,20 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
 
   if (key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta') return;
 
+  if (state.pendingKey === 'f') {
+    if (key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      stopMovement();
+      clearPendingChordTimer();
+      useGameStore.setState({ pendingKey: null });
+      state.tryFlashTeleport(key);
+      state.updateLastInputTime();
+      return;
+    }
+    clearPendingChordTimer();
+    useGameStore.setState({ pendingKey: null });
+  }
+
   if (state.pendingKey === 'g') {
     if (key === 'g') {
       e.preventDefault();
@@ -193,6 +207,14 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
       e.preventDefault();
       stopMovement();
       handleWeaponFire(state);
+      state.updateLastInputTime();
+      break;
+    case 'f':
+      e.preventDefault();
+      stopMovement();
+      clearPendingChordTimer();
+      useGameStore.setState({ pendingKey: 'f' });
+      armPendingChordTimer({ pendingKey: 'f' });
       state.updateLastInputTime();
       break;
     case 'g':

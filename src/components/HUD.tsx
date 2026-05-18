@@ -63,6 +63,12 @@ export function HUD() {
   if (pendingKey === 'g') {
     pendingDisplay = pendingDisplay ? `${pendingDisplay} g_` : 'g_';
   }
+  if (pendingKey === 'f') {
+    pendingDisplay = pendingDisplay ? `${pendingDisplay} f_` : 'f_';
+  }
+
+  const flashStep = inventoryItems.find((i) => i.id === 'flash_step');
+  const flashCharges = flashStep && flashStep.count > 0 ? flashStep.count : 0;
 
   const dirArrow = playerDir.dx === 1 ? '>' : playerDir.dx === -1 ? '<' : playerDir.dy === 1 ? 'v' : '^';
 
@@ -112,6 +118,11 @@ export function HUD() {
       )}
       <HealthBar current={hp} max={maxHP} color={COLORS.hpFull} emptyColor={COLORS.hpEmpty} label="HP" />
       <HealthBar current={mp} max={maxMP} color={COLORS.mpFull} emptyColor={COLORS.mpEmpty} label="MP" />
+      {flashCharges > 0 && (
+        <span style={{ color: COLORS.accent, fontWeight: 'bold' }} title="Flash Step charges (f + character)">
+          [^×{flashCharges}]
+        </span>
+      )}
       <span style={{ color: COLORS.textDim, marginLeft: 'auto' }}>
         Tutorial {currentLevel}
       </span>

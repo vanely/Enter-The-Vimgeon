@@ -1,4 +1,5 @@
 import type { RoomTemplate } from './types';
+import { doorCellAt } from './doorGeometry';
 
 function doorKeyAt(x: number, y: number): string {
   return `${x},${y}`;
@@ -31,6 +32,7 @@ export function cellAllowsLight(
   if (y < 0 || y >= room.height || x < 0 || x >= room.width) return false;
   const ch = room.layout[y]?.[x] ?? ' ';
   if (ch === '#' || ch === '+') return false;
+  if (ch === '*') return false;
   if (ch === `'`) return true;
   if (ch === '/' || ch === '\\') return true;
   if (ch === 'R' || ch === 'S') return true;
@@ -47,7 +49,8 @@ export function openLightPuzzleDoors(room: RoomTemplate, doorStates: Map<string,
     if (door.gateCondition !== 'light_puzzle' || door.open) continue;
     door.open = true;
     for (let i = 0; i < door.chars.length; i++) {
-      doorStates.set(doorKeyAt(door.pos.x + i, door.pos.y), true);
+      const p = doorCellAt(door, i);
+      doorStates.set(doorKeyAt(p.x, p.y), true);
     }
   }
 }

@@ -61,6 +61,11 @@ export interface Door {
   targetLevel?: number;
   chars: string[];
   requiredKey?: string;
+  /**
+   * Horizontal (default): `chars` span east from `pos`.
+   * Vertical: `chars` span south from `pos` (east/west wall exits).
+   */
+  orientation?: 'horizontal' | 'vertical';
 }
 
 export interface KeyItem {
@@ -104,6 +109,11 @@ export interface RoomTemplate {
   hintDelay?: number;
   /** When set, a `projectiles` entry with `owner: 'light'` is spawned; mirrors `/` `\\` bend it (see projectiles.ts). */
   lightPuzzle?: LightPuzzleConfig;
+  /**
+   * Extra single-character layout glyphs that block walking (merged with engine defaults `# * +`).
+   * Use for room-specific props without changing global walk rules.
+   */
+  collisionChars?: string[];
 }
 
 export interface Weapon {
@@ -207,6 +217,8 @@ export interface GameState {
   yankFromContainer: (bracketType: string) => void;
   setProjectiles: (projectiles: Projectile[]) => void;
   setPendingKey: (key: string | null) => void;
+  /** Flash Step: jump to `targetChar` on the current row (requires Flash Step charges on the ^ item). */
+  tryFlashTeleport: (targetChar: string) => void;
   setPlayerDead: (dead: boolean) => void;
   setPlayerInvincible: (ticks: number) => void;
   setPlayerDir: (dir: { dx: number; dy: number }) => void;

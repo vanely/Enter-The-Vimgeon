@@ -82,10 +82,35 @@ export default function App() {
       }}
     >
       <HUD />
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-        <GameGrid />
-        <SignPopup />
-        <TutorialHint />
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            width: '90%',
+            height: '90%',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            boxSizing: 'border-box',
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          <GameGrid />
+          <SignPopup />
+          <TutorialHint />
+        </div>
         <DeathScreen />
         <InventoryScreen />
       </div>

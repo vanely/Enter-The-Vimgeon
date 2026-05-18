@@ -12,6 +12,9 @@ export interface ItemTemplate {
   char: string;
 }
 
+/** Charges granted each time a Flash Step pickup is yanked into inventory. */
+export const FLASH_STEP_CHARGES_PER_PICKUP = 3;
+
 export const ITEM_TEMPLATES: Record<string, ItemTemplate> = {
   iron_key: { name: 'Iron Key', char: '&' },
   silver_key: { name: 'Silver Key', char: '&' },
@@ -19,6 +22,7 @@ export const ITEM_TEMPLATES: Record<string, ItemTemplate> = {
   health_potion: { name: 'Health Potion', char: '!' },
   crossbow: { name: 'Crossbow', char: 'T' },
   fire_wand: { name: 'Fire Wand', char: '*' },
+  flash_step: { name: 'Flash Step', char: '^' },
 };
 
 /** Stackable consumables; equip then gg to use. */

@@ -1,17 +1,22 @@
 ---
 description: Game map should fill most of the screen for non-tutorial levels
-globs: src/data/rooms/**/*.ts
+globs: src/data/rooms/**/*.ts,src/App.tsx
 alwaysApply: false
 ---
 
 # Game Map Sizing
 
-Tutorial levels use small rooms (42x16) for focused teaching. All later levels (Floor 1+) should use much larger rooms that fill most of the viewport.
+Tutorial and default stage size is **`ROOM_W` × `ROOM_H`** in `src/data/rooms/tutorial.ts` (currently **128×30** — wide, shallow rows so the map fits under the HUD). Rooms are built with `hollowRoom(perimeterDoors?)` plus `setCells` / `setFloorRow`.
 
-- Target room size for gameplay levels: ~80x30 characters minimum
-- The GameGrid should expand to fill available screen space between the HUD and MessageLog
-- Room dimensions should be responsive — consider the player's viewport
-- When designing room templates, use the full width/height to create interesting layouts
-- Floor tiles, props, and enemies should be spread across the full area to avoid clustering
+**Viewport:** `GameGrid` measures its container and, when the room is larger than the visible cell budget, pans with `transform` so the player stays centered (clamped at map edges). If only **width** or only **height** overflows, the map stays **centered** on the other axis (`justify-content` / `align-items` on the viewport flex). `EnemyHealthBars` stay aligned because they share the same transformed layer.
 
-The renderer already supports arbitrary room sizes — just increase ROOM_W and ROOM_H in level data files.
+**Perimeter exits:** `hollowRoom()` accepts an optional array of `PerimeterDoor` specs (`north` / `south` with starting `x`, or `east` / `west` with starting `y`, plus `chars`). Omit the argument for a single centered south `||` exit; pass `[]` for a sealed outer box. **Engine:** east/west multi-tile exits need `orientation: 'vertical'` on the `Door` object so `doorStates` keys match the layout.
+
+All later levels should use the same `ROOM_W` / `ROOM_H` (or room-specific `width` / `height` on `RoomTemplate`) so props use the full stage — see `brainstorming/roadmap.md`.
+
+- The **playable stage** (map + in-map overlays) is laid out at **90%** of the width and height of the region between the HUD, command line, and message log — see `src/App.tsx` (main game column).
+- The GameGrid should **scale with room data** inside that stage; larger maps use the same viewport — consider `overflow: auto` or font scaling later if maps exceed the stage.
+- When designing room templates, use the full width/height; internal `#` walls can carve sub-rooms (see `puzzles.ts`).
+- **Collision:** `src/engine/collision.ts` treats layout `#`, `*`, `+` as solid for walking (plus optional `RoomTemplate.collisionChars`). Uncollected pickups on a tile still let you step in to collect. Projectiles and light pulses treat `*` as blocking too.
+
+The renderer supports arbitrary room sizes — bump `ROOM_W` / `ROOM_H` and refit layouts, or set per-room `width` / `height` if a one-off size is needed.

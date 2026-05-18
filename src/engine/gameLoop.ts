@@ -1,4 +1,5 @@
 import { useGameStore } from './gameState';
+import { doorCellAt } from './doorGeometry';
 import { advanceProjectiles, advanceLightPulse, createLightPulse } from './projectiles';
 import { tickEnemies } from './entities';
 import { applyBarrelExplosion, tickBarrelExplosions } from './combat';
@@ -100,7 +101,8 @@ function tick() {
     const closedDoor = room.doors.find((d) => !d.open && d.gateCondition === 'all_enemies_dead');
     if (closedDoor) {
       for (let i = 0; i < closedDoor.chars.length; i++) {
-        doorStates.set(`${closedDoor.pos.x + i},${closedDoor.pos.y}`, true);
+        const p = doorCellAt(closedDoor, i);
+        doorStates.set(`${p.x},${p.y}`, true);
       }
       closedDoor.open = true;
       useGameStore.getState().addMessage('All enemies defeated! The door opens!', COLORS.doorOpen);
