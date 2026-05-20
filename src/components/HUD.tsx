@@ -47,6 +47,8 @@ export function HUD() {
   const mp = useGameStore((s) => s.playerMP);
   const maxMP = useGameStore((s) => s.playerMaxMP);
   const currentLevel = useGameStore((s) => s.currentLevel);
+  const runMode = useGameStore((s) => s.runMode);
+  const dungeonFloor = useGameStore((s) => s.dungeonFloor);
   const pendingVisualInner = useGameStore((s) => s.pendingVisualInner);
   const pendingKey = useGameStore((s) => s.pendingKey);
   const playerDir = useGameStore((s) => s.playerDir);
@@ -124,7 +126,7 @@ export function HUD() {
         </span>
       )}
       <span style={{ color: COLORS.textDim, marginLeft: 'auto' }}>
-        Tutorial {currentLevel}
+        {runMode === 'dungeon' ? `Dungeon ${dungeonFloor + 1}` : `Tutorial ${currentLevel}`}
       </span>
     </div>
   );

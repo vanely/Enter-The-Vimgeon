@@ -20,6 +20,29 @@ Brainstorming look, feel, tone, and presentation—not mechanics. Pair with `sto
 
 - **Fonts** — JetBrains Mono / Fira Code already signal “editor.” Consider one display font for titles only (title screen, chapter cards) vs in-grid strict mono.
 - **Motion** — Subtle: cursor blink on command line, door “creak” as color pulse, hit flash on `@`. Avoid busy particle systems that fight ASCII legibility.
+
+## Fire / flame (ASCII concept — not implemented)
+
+Direction for a **fire wand**, braziers, or hazards: layered parens as the body, sparse `.` and `*` above as **embers** that read as drifting **upward** across animation frames (cycle positions or phase so dots climb and despawn at the top).
+
+**Shape sketch** (multi-line; parens suggest a tapered flame):
+
+```
+      .       .
+    .       *
+       .  *
+         (
+        ( )
+       (   )
+```
+
+**Motion ideas**
+
+- **Top / opening parenthesis** — Alternate which side “leans” (e.g. flip the small top `(` with its mirror, or swap adjacent glyph pairs) on a slow tick so the tip **flicks** left/right like a candle.
+- **Embers** — Dots rise frame-to-frame; `*` as slightly hotter sparks, fewer in number, faster vertical phase or occasional lateral jitter.
+- **Base** — Wider rows `( )` / `(   )` stay mostly stable; optional subtle color pulse on accent (warm orange/red in `COLORS`) without changing glyphs every frame.
+
+*Implementation TBD; when building, keep the footprint small so projectiles and combat readability stay primary.*
 - **Signs & copy** — In-world text can be slightly archaic or manual-page dry; system messages slightly wry or neutral—pick one voice and stick to it.
 
 ## Mood & genre dressing

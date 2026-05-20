@@ -2,7 +2,7 @@ import type { Position, Enemy, RoomTemplate, Projectile } from './types';
 import { createProjectile, directionToward } from './projectiles';
 
 function isBlocking(char: string): boolean {
-  return char === '#' || char === '+' || char === '|' || char === '-';
+  return char === '#' || char === '+' || char === '|' || char === '-' || char === '_';
 }
 
 function canMoveTo(pos: Position, room: RoomTemplate, enemies: Enemy[], playerPos: Position): boolean {

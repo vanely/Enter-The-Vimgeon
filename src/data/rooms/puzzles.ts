@@ -11,14 +11,13 @@ import {
 import { keyItemAt } from '../items';
 
 /*
- * Story / puzzle rooms — not part of the combat tutorial track.
- * When the narrative is ready, import levels from here and register them in initTutorialLevels
- * (or a dedicated story loader); do not merge this file into the tutorial by default.
+ * Story / puzzle rooms. `puzzlePrismaticVault` is listed in `act1Levels` in `act1.ts`;
+ * its south door `targetLevel` must stay aligned with `ACT1_INDEX.mainShaft` in `act1.ts`.
  */
 
 function layoutPrismaticVault(): string[] {
   const rows = hollowRoom([
-    { side: 'north', x: 82, chars: ['-', '-', '-', '-'] },
+    { side: 'north', x: 82, chars: ['|', '|'] },
     { side: 'south', x: 63, chars: ['|', '|'] },
   ]);
   for (let yy = 4; yy <= 21; yy++) {
@@ -54,13 +53,13 @@ export const puzzlePrismaticVault: RoomTemplate = {
       pos: { x: 82, y: 0 },
       open: false,
       gateCondition: 'light_puzzle',
-      chars: ['-', '-', '-', '-'],
+      chars: ['|', '|'],
     },
     {
       pos: { x: 63, y: ROOM_H - 1 },
       open: false,
       gateCondition: 'reach',
-      targetLevel: 5,
+      targetLevel: 10,
       chars: ['|', '|'],
     },
   ],

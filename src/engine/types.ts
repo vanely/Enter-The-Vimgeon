@@ -21,6 +21,8 @@ export interface Projectile {
 
 export interface Enemy {
   id: string;
+  /** Archetype key in `ENEMY_ARCHETYPES` (bestiary + balancing). */
+  archetypeId: string;
   name: string;
   pos: Position;
   hp: number;
@@ -59,11 +61,19 @@ export interface Door {
   open: boolean;
   gateCondition?: string;
   targetLevel?: number;
+  /** Two `|` (north/south) or four `_` in 2×2 row-major (east/west). */
   chars: string[];
   requiredKey?: string;
   /**
-   * Horizontal (default): `chars` span east from `pos`.
-   * Vertical: `chars` span south from `pos` (east/west wall exits).
+   * When set, stepping through this exit moves on the dungeon grid instead of a tutorial index.
+   */
+  dungeonDelta?: { dx: number; dy: number };
+  /** Walking through opens the first procedural dungeon run (post-tutorial). */
+  startDungeonRun?: boolean;
+  /**
+   * Horizontal (default): `chars` span east from `pos` (north/south jambs: use two `|`).
+   * Vertical: `chars` span south from `pos` (legacy two tall `|` on one column).
+   * **Four** `chars`: 2×2 block from `pos` (top-left), row-major — use for east/west `____` doors.
    */
   orientation?: 'horizontal' | 'vertical';
 }
@@ -147,6 +157,15 @@ export interface Message {
   timestamp: number;
 }
 
+export type RunMode = 'tutorial' | 'dungeon';
+
+export type DungeonRoomKind = 'start' | 'combat' | 'treasure' | 'boss' | 'arena';
+
+export interface DungeonCell {
+  kind: DungeonRoomKind;
+  id: string;
+}
+
 export interface GameState {
   mode: VimMode;
   playerPos: Position;
@@ -155,6 +174,16 @@ export interface GameState {
   playerMP: number;
   playerMaxMP: number;
   currentLevel: number;
+  runMode: RunMode;
+  dungeonFloor: number;
+  /** Procedural floor grid; null cells are void. */
+  dungeonGrid: (DungeonCell | null)[][] | null;
+  /** Player position in dungeonGrid coordinates. */
+  dungeonGridPos: Position | null;
+  /** Keys "gx,gy" for explored rooms on the current floor. */
+  exploredDungeonCells: Set<string>;
+  /** Archetype ids (e.g. goblin_grunt) seen this run — feeds :help bestiary. */
+  encounteredEnemies: Set<string>;
   currentRoom: RoomTemplate | null;
   renderedGrid: Cell[][];
   messages: Message[];
@@ -189,6 +218,8 @@ export interface GameState {
   /** Inventory row id of equipped weapon or consumable (gg / d / p). */
   equippedItemId: string | null;
   weaponCooldown: number;
+  /** Ticks until next melee (`x`); decremented each game loop tick. */
+  meleeCooldown: number;
   lightPuzzleSolved: boolean;
   /** Set when :help is run once (tutorial help gate). */
   hasDemoedHelpMenu: boolean;
@@ -198,6 +229,13 @@ export interface GameState {
   yankItem: () => void;
   setCurrentRoom: (room: RoomTemplate) => void;
   loadLevel: (levelIndex: number) => void;
+  startDungeonRun: () => void;
+  transitionDungeonByDoor: (delta: { dx: number; dy: number }) => void;
+  jumpLandmarkForward: () => void;
+  jumpLandmarkBackward: () => void;
+  jumpLineStart: () => void;
+  jumpLineEnd: () => void;
+  registerEncountersFromEnemies: (enemies: Enemy[]) => void;
   addMessage: (text: string, color?: string) => void;
   setCommandBuffer: (cmd: string) => void;
   executeCommand: (cmd: string) => void;
@@ -228,6 +266,8 @@ export interface GameState {
   toggleInventory: () => void;
   setInventoryCursor: (cursor: number) => void;
   assignQuickSlot: (itemIndex: number, slot: number) => void;
+  useQuickSlot: (slot: number) => void;
+  consumeInventoryItem: (itemId: string) => void;
   addInventoryItem: (
     id: string,
     name: string,

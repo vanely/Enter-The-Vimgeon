@@ -34,7 +34,7 @@ function edgeHorizontalSolid(): string {
   return '+' + '-'.repeat(IW) + '+';
 }
 
-/** Carve a door span into the north/south edge (`-` or `|`) or the east/west wall (`|`). */
+/** Carve perimeter exits: north/south use two `|`; east/west use four `_` in a 2×2 (row-major). */
 export type PerimeterDoor =
   | { side: 'north' | 'south'; x: number; chars: string[] }
   | { side: 'east' | 'west'; y: number; chars: string[] };
@@ -68,12 +68,29 @@ function applyPerimeterDoor(rows: string[], d: PerimeterDoor): void {
       setCell(rows, d.x + i, ROOM_H - 1, chars[i]!);
     }
   } else if (d.side === 'west') {
-    for (let i = 0; i < L; i++) {
-      setCell(rows, 0, d.y + i, chars[i]!);
+    if (L === 4) {
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 2; col++) {
+          setCell(rows, col, d.y + row, chars[row * 2 + col]!);
+        }
+      }
+    } else {
+      for (let i = 0; i < L; i++) {
+        setCell(rows, 0, d.y + i, chars[i]!);
+      }
     }
   } else if (d.side === 'east') {
-    for (let i = 0; i < L; i++) {
-      setCell(rows, ROOM_W - 1, d.y + i, chars[i]!);
+    if (L === 4) {
+      const x0 = ROOM_W - 2;
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 2; col++) {
+          setCell(rows, x0 + col, d.y + row, chars[row * 2 + col]!);
+        }
+      }
+    } else {
+      for (let i = 0; i < L; i++) {
+        setCell(rows, ROOM_W - 1, d.y + i, chars[i]!);
+      }
     }
   }
 }
@@ -129,7 +146,7 @@ function layoutLevel1(): string[] {
 }
 
 function layoutLevel2(): string[] {
-  const rows = hollowRoom([{ side: 'north', x: 33, chars: ['-', '-', '-', '-'] }]);
+  const rows = hollowRoom([{ side: 'north', x: 33, chars: ['|', '|'] }]);
   setCells(rows, [
     { x: 15, y: 6, ch: '[' }, { x: 16, y: 6, ch: '?' }, { x: 17, y: 6, ch: ']' },
     { x: 62, y: 24, ch: '@' },
@@ -139,7 +156,7 @@ function layoutLevel2(): string[] {
 }
 
 function layoutLevel3(): string[] {
-  const rows = hollowRoom([{ side: 'west', y: 16, chars: ['|', '|'] }]);
+  const rows = hollowRoom([{ side: 'west', y: 16, chars: ['_', '_', '_', '_'] }]);
   setCells(rows, [
     { x: 15, y: 6, ch: '[' }, { x: 16, y: 6, ch: '?' }, { x: 17, y: 6, ch: ']' },
     { x: 69, y: 23, ch: '@' },
@@ -162,7 +179,7 @@ function layoutLevel4(): string[] {
 }
 
 function layoutComplete(): string[] {
-  const rows = hollowRoom([{ side: 'east', y: 15, chars: ['|', '|'] }]);
+  const rows = hollowRoom([{ side: 'east', y: 15, chars: ['_', '_', '_', '_'] }]);
   setCells(rows, [
     { x: 15, y: 7, ch: '*' }, { x: 100, y: 7, ch: '*' },
     { x: 15, y: 12, ch: '[' }, { x: 16, y: 12, ch: '?' }, { x: 17, y: 12, ch: ']' },
@@ -234,13 +251,12 @@ export const tutorialLevel1: RoomTemplate = {
   layout: layoutLevel1(),
   doors: [
     {
-      pos: { x: ROOM_W - 1, y: 18 },
+      pos: { x: ROOM_W - 2, y: 18 },
       open: false,
       gateCondition: 'command_open',
       requiredKey: 'iron_key',
       targetLevel: 2,
-      chars: ['|', '|'],
-      orientation: 'vertical',
+      chars: ['_', '_', '_', '_'],
     },
   ],
   signs: [
@@ -282,7 +298,7 @@ export const tutorialLevel2: RoomTemplate = {
       open: false,
       gateCondition: 'reach',
       targetLevel: 3,
-      chars: ['-', '-', '-', '-'],
+      chars: ['|', '|'],
     },
   ],
   signs: [
@@ -348,8 +364,7 @@ export const tutorialLevel3: RoomTemplate = {
       open: false,
       gateCondition: 'all_enemies_dead',
       targetLevel: 4,
-      chars: ['|', '|'],
-      orientation: 'vertical',
+      chars: ['_', '_', '_', '_'],
     },
   ],
   signs: [
@@ -451,12 +466,11 @@ export const tutorialComplete: RoomTemplate = {
   layout: layoutComplete(),
   doors: [
     {
-      pos: { x: ROOM_W - 1, y: 15 },
+      pos: { x: ROOM_W - 2, y: 15 },
       open: false,
       gateCondition: 'reach',
       targetLevel: 6,
-      chars: ['|', '|'],
-      orientation: 'vertical',
+      chars: ['_', '_', '_', '_'],
     },
   ],
   signs: [
@@ -502,7 +516,7 @@ export const tutorialLevelHelp: RoomTemplate = {
       pos: { x: Math.floor((ROOM_W - 2) / 2), y: ROOM_H - 1 },
       open: false,
       gateCondition: 'help_then_reach',
-      targetLevel: 0,
+      targetLevel: 7,
       chars: ['|', '|'],
     },
   ],
@@ -523,8 +537,11 @@ export const tutorialLevelHelp: RoomTemplate = {
         '  :q closes the manual.  ',
         '',
         '  Then walk south again; ',
-        '  the exit sends you to   ',
-        '  Tutorial 0 (replay).  ',
+        '  Act 1 begins — combat   ',
+        '  and an optional vault.  ',
+        '',
+        '  Beyond that lies the    ',
+        '  procedural Vimgeon.     ',
         '',
         '  (press any key to close)',
       ],

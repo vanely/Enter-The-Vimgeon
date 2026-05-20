@@ -1,5 +1,7 @@
 import type { Position, Enemy, Barrel, RoomTemplate, Projectile } from './types';
-import { createProjectile, directionToward, scanForChar } from './projectiles';
+import { createProjectile } from './projectiles';
+
+export { MELEE_COOLDOWN_TICKS } from './tickConfig';
 
 export function meleeStrike(
   playerPos: Position,
@@ -38,22 +40,6 @@ export function meleeStrike(
   });
 
   return { updatedEnemies, updatedBarrels, killed, barrelHits };
-}
-
-export function fireShot(
-  playerPos: Position,
-  targetChar: string,
-  room: RoomTemplate,
-  enemies: Enemy[],
-): { projectile: Projectile | null; dir: { dx: number; dy: number } | null } {
-  const target = scanForChar(room, playerPos, targetChar, enemies);
-  if (!target) return { projectile: null, dir: null };
-
-  const dir = directionToward(playerPos, target);
-  return {
-    projectile: createProjectile(playerPos, dir.dx, dir.dy, 'player', 1),
-    dir,
-  };
 }
 
 export function repeatShot(

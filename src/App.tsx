@@ -3,6 +3,7 @@ import { useGameStore, initTutorialLevels } from './engine/gameState';
 import { handleKeyDown, handleKeyUp } from './engine/input';
 import { startLoop, stopLoop } from './engine/gameLoop';
 import { tutorialLevels } from './data/rooms/tutorial';
+import { act1Levels } from './data/rooms/act1';
 import { GameGrid } from './components/GameGrid';
 import { HUD } from './components/HUD';
 import { MessageLog } from './components/MessageLog';
@@ -11,11 +12,12 @@ import { SignPopup } from './components/SignPopup';
 import { HelpMenu } from './components/HelpMenu';
 import { TutorialHint } from './components/TutorialHint';
 import { TitleScreen } from './components/TitleScreen';
+import { Minimap } from './components/Minimap';
 import { DeathScreen } from './components/DeathScreen';
 import { InventoryScreen } from './components/InventoryScreen';
 import { COLORS } from './utils/colors';
 
-initTutorialLevels(tutorialLevels);
+initTutorialLevels([...tutorialLevels, ...act1Levels]);
 
 export default function App() {
   const gameStarted = useGameStore((s) => s.gameStarted);
@@ -108,6 +110,7 @@ export default function App() {
           }}
         >
           <GameGrid />
+          <Minimap />
           <SignPopup />
           <TutorialHint />
         </div>

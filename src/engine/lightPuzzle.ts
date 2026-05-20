@@ -36,7 +36,7 @@ export function cellAllowsLight(
   if (ch === `'`) return true;
   if (ch === '/' || ch === '\\') return true;
   if (ch === 'R' || ch === 'S') return true;
-  if (ch === '|' || ch === '-') {
+  if (ch === '|' || ch === '-' || ch === '_') {
     const open = doorStates.get(doorKeyAt(x, y)) ?? false;
     return doorStates.has(doorKeyAt(x, y)) && open;
   }

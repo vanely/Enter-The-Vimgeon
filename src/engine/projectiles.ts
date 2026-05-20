@@ -3,8 +3,19 @@ import { cellAllowsLight, reflectMirror } from './lightPuzzle';
 
 let nextProjectileId = 1;
 
-function isBlocking(char: string): boolean {
-  return char === '#' || char === '+' || char === '|' || char === '-' || char === '*';
+function cellBlocksProjectile(
+  room: RoomTemplate,
+  x: number,
+  y: number,
+  doorStates: Map<string, boolean>,
+): boolean {
+  const ch = room.layout[y]?.[x] ?? ' ';
+  const dk = `${x},${y}`;
+  if (ch === '|' || ch === '-' || ch === '_') {
+    if (doorStates.has(dk)) return !doorStates.get(dk)!;
+    return true;
+  }
+  return ch === '#' || ch === '+' || ch === '*';
 }
 
 export function createProjectile(
@@ -53,6 +64,7 @@ export function advanceProjectiles(
   enemies: Enemy[],
   barrels: Barrel[],
   playerPos: Position,
+  doorStates: Map<string, boolean>,
 ): TickResult {
   const result: TickResult = {
     updatedProjectiles: [],
@@ -64,13 +76,27 @@ export function advanceProjectiles(
   for (const proj of projectiles) {
     if (proj.owner === 'light') continue;
 
+    if (proj.owner === 'player') {
+      const overlapEnemy = enemies.find(
+        (e) => !e.dead && e.pos.x === proj.pos.x && e.pos.y === proj.pos.y,
+      );
+      if (overlapEnemy) {
+        result.enemyHits.push({ enemyId: overlapEnemy.id, damage: proj.damage });
+        continue;
+      }
+    } else if (proj.owner === 'enemy') {
+      if (proj.pos.x === playerPos.x && proj.pos.y === playerPos.y) {
+        result.playerHit += proj.damage;
+        continue;
+      }
+    }
+
     const nx = proj.pos.x + proj.dx;
     const ny = proj.pos.y + proj.dy;
 
     if (nx < 0 || nx >= room.width || ny < 0 || ny >= room.height) continue;
 
-    const layoutChar = room.layout[ny]?.[nx] || ' ';
-    if (isBlocking(layoutChar)) continue;
+    if (cellBlocksProjectile(room, nx, ny, doorStates)) continue;
 
     if (proj.owner === 'player') {
       const hitEnemy = enemies.find((e) => !e.dead && e.pos.x === nx && e.pos.y === ny);

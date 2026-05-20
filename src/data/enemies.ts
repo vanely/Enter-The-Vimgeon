@@ -56,6 +56,7 @@ export function createEnemy(archetypeId: string, instanceId: string, pos: Positi
   }
   return {
     id: instanceId,
+    archetypeId: archetypeId,
     name: arc.name,
     pos: { ...pos },
     hp: arc.maxHp,

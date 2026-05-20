@@ -5,10 +5,69 @@ import { COLORS } from '../utils/colors';
 import type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem, Weapon, ConsumableSpec } from './types';
 import type { EnemyAI } from './types';
 import { WEAPONS } from '../data/weapons';
-import { createLightPulse } from './projectiles';
+import { createLightPulse, createProjectile } from './projectiles';
 import { FLASH_STEP_CHARGES_PER_PICKUP, lookupConsumable } from '../data/items';
 import { doorCellAt } from './doorGeometry';
 import { terrainBlocksMovement } from './collision';
+import { generateDungeonFloor, materializeDungeonRoom } from './dungeon';
+
+function layoutStripPlayerAt(layout: string[]): string[] {
+  return layout.map((row) => row.replace(/@/g, '.'));
+}
+
+function spawnPosForDungeonEntry(room: RoomTemplate, enteredFrom: { dx: number; dy: number }): Position {
+  const cx = Math.floor(room.width / 2);
+  const cy = Math.floor(room.height / 2);
+  if (enteredFrom.dx === -1 && enteredFrom.dy === 0) {
+    return { x: Math.min(room.width - 3, cx + 8), y: cy };
+  }
+  if (enteredFrom.dx === 1 && enteredFrom.dy === 0) {
+    return { x: Math.max(2, cx - 8), y: cy };
+  }
+  if (enteredFrom.dx === 0 && enteredFrom.dy === -1) {
+    return { x: cx, y: Math.min(room.height - 3, cy + 4) };
+  }
+  if (enteredFrom.dx === 0 && enteredFrom.dy === 1) {
+    return { x: cx, y: Math.max(2, cy - 4) };
+  }
+  return findPlayerStart(room.layout);
+}
+
+function cloneRoomTemplate(template: RoomTemplate): RoomTemplate {
+  return {
+    ...template,
+    layout: [...template.layout],
+    doors: template.doors.map((d) => ({
+      ...d,
+      pos: { ...d.pos },
+      open: false,
+    })),
+    signs: template.signs.map((s) => ({ ...s, pos: { ...s.pos }, text: [...s.text] })),
+    keys: template.keys.map((k) => ({ ...k, pos: { ...k.pos }, collected: false })),
+    enemies: template.enemies.map((e) => ({
+      ...e,
+      pos: { ...e.pos },
+      dead: false,
+      ticksSinceShot: 0,
+      ticksSinceMove: 0,
+      preRowMovesRemaining: 1 + Math.floor(Math.random() * 4),
+    })),
+    barrels: template.barrels.map((b) => ({ ...b, pos: { ...b.pos }, destroyed: false, explosionFrame: -1 })),
+    containers: template.containers.map((c) => ({
+      ...c,
+      pos: { ...c.pos },
+      item: { ...c.item, pos: { ...c.item.pos } },
+      opened: false,
+    })),
+    lightPuzzle: template.lightPuzzle
+      ? {
+          source: { ...template.lightPuzzle.source },
+          sourceDir: { ...template.lightPuzzle.sourceDir },
+          receptor: { ...template.lightPuzzle.receptor },
+        }
+      : undefined,
+  };
+}
 
 export type { VimMode, Position, Door, Sign, KeyItem, RoomTemplate, Message, GameState, Projectile, Enemy, Barrel, Container, InventoryItem, Weapon, ConsumableSpec, EnemyAI };
 
@@ -45,7 +104,7 @@ function containerKindLabel(bracketType: string): string {
 }
 
 function isDoorChar(char: string): boolean {
-  return char === '|' || char === '-';
+  return char === '|' || char === '-' || char === '_';
 }
 
 function buildGrid(room: RoomTemplate, _playerPos: Position, doorStates: Map<string, boolean>): Cell[][] {
@@ -73,7 +132,8 @@ function buildGrid(room: RoomTemplate, _playerPos: Position, doorStates: Map<str
           cell = createCell('.', COLORS.floor);
           break;
         case '|':
-        case '-': {
+        case '-':
+        case '_': {
           const dk = doorKey({ x, y });
           const isDoor = doorStates.has(dk);
           if (isDoor) {
@@ -269,6 +329,27 @@ function checkDoorCollision(pos: Position, doors: Door[]): Door | null {
   return null;
 }
 
+/** When every enemy is dead, opens all `all_enemies_dead` doors (mutates `room.doors` and `doorStates`). */
+export function tryOpenAllEnemiesDeadGates(
+  room: RoomTemplate,
+  enemies: Enemy[],
+  doorStates: Map<string, boolean>,
+): string | undefined {
+  const allDead = enemies.length > 0 && enemies.every((e) => e.dead);
+  if (!allDead) return undefined;
+  let any = false;
+  for (const door of room.doors) {
+    if (door.open || door.gateCondition !== 'all_enemies_dead') continue;
+    any = true;
+    door.open = true;
+    for (let i = 0; i < door.chars.length; i++) {
+      const p = doorCellAt(door, i);
+      doorStates.set(doorKey(p), true);
+    }
+  }
+  return any ? 'All enemies defeated! The door opens!' : undefined;
+}
+
 let _tutorialLevels: RoomTemplate[] | null = null;
 
 function getTutorialLevels(): RoomTemplate[] {
@@ -307,6 +388,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   playerMP: 5,
   playerMaxMP: 5,
   currentLevel: 0,
+  runMode: 'tutorial',
+  dungeonFloor: 0,
+  dungeonGrid: null,
+  dungeonGridPos: null,
+  exploredDungeonCells: new Set<string>(),
+  encounteredEnemies: new Set<string>(),
   currentRoom: null,
   renderedGrid: [],
   messages: [],
@@ -340,6 +427,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   playerDead: false,
   equippedItemId: null,
   weaponCooldown: 0,
+  meleeCooldown: 0,
   lightPuzzleSolved: false,
   hasDemoedHelpMenu: false,
 
@@ -397,7 +485,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       if (doorIsOpen) {
-        if (door && door.targetLevel !== undefined) {
+        if (door?.startDungeonRun) {
+          set({ lastInputTime: Date.now(), hintVisible: false });
+          get().startDungeonRun();
+          return;
+        }
+        if (door?.dungeonDelta && state.runMode === 'dungeon') {
+          set({ lastInputTime: Date.now(), hintVisible: false });
+          get().transitionDungeonByDoor(door.dungeonDelta);
+          return;
+        }
+        if (door && door.targetLevel !== undefined && state.runMode === 'tutorial') {
           set({ lastInputTime: Date.now(), hintVisible: false });
           get().loadLevel(door.targetLevel);
           return;
@@ -540,6 +638,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     const initialProjectiles = level.lightPuzzle ? [createLightPulse(level.lightPuzzle)] : [];
     set({
       currentLevel: levelIndex,
+      runMode: 'tutorial',
+      dungeonGrid: null,
+      dungeonGridPos: null,
+      exploredDungeonCells: new Set<string>(),
       currentRoom: level,
       playerPos,
       doorStates,
@@ -573,10 +675,231 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingVisualInner: null,
       playerDead: false,
       weaponCooldown: 0,
+      meleeCooldown: 0,
       lightPuzzleSolved: false,
       playerHP: get().playerMaxHP,
       hasDemoedHelpMenu: false,
     });
+    get().registerEncountersFromEnemies(level.enemies);
+  },
+
+  startDungeonRun: () => {
+    clearPendingChordTimer();
+    const floorIdx = 0;
+    const { grid, startGridPos } = generateDungeonFloor(floorIdx);
+    const raw = materializeDungeonRoom(grid, floorIdx, startGridPos.x, startGridPos.y);
+    const level = cloneRoomTemplate(raw);
+    const playerPos = findPlayerStart(level.layout);
+    const doorStates = new Map<string, boolean>();
+    for (const door of level.doors) {
+      for (let i = 0; i < door.chars.length; i++) {
+        doorStates.set(doorKey(doorCellAt(door, i)), false);
+      }
+    }
+    const explored = new Set<string>([`${startGridPos.x},${startGridPos.y}`]);
+    const uk = new Set(get().unlockedKeys);
+    for (const k of ['w', 'b', '0', '$', ';']) uk.add(k);
+    const initialProjectiles = level.lightPuzzle ? [createLightPulse(level.lightPuzzle)] : [];
+    set({
+      runMode: 'dungeon',
+      dungeonFloor: floorIdx,
+      dungeonGrid: grid,
+      dungeonGridPos: { ...startGridPos },
+      exploredDungeonCells: explored,
+      tutorialComplete: true,
+      unlockedKeys: uk,
+      currentLevel: -1,
+      currentRoom: level,
+      playerPos,
+      doorStates,
+      renderedGrid: buildFullGrid(
+        level,
+        playerPos,
+        doorStates,
+        level.enemies,
+        level.barrels,
+        initialProjectiles,
+        0,
+        level.containers,
+      ),
+      signPopup: null,
+      messages: [...get().messages.slice(-18), {
+        text: '-- The Vimgeon opens before you... --',
+        color: COLORS.accent,
+        timestamp: Date.now(),
+      }],
+      hintVisible: false,
+      mode: 'NORMAL',
+      commandBuffer: '',
+      enemies: level.enemies.map((e) => ({ ...e })),
+      barrels: level.barrels.map((b) => ({ ...b })),
+      containers: level.containers.map((c) => ({ ...c })),
+      projectiles: initialProjectiles,
+      playerDir: { dx: 1, dy: 0 },
+      lastShotDir: null,
+      playerInvincible: 0,
+      pendingKey: null,
+      pendingVisualInner: null,
+      playerDead: false,
+      weaponCooldown: 0,
+      meleeCooldown: 0,
+      lightPuzzleSolved: false,
+      hasDemoedHelpMenu: true,
+      playerHP: get().playerMaxHP,
+      playerMP: get().playerMaxMP,
+    });
+    get().registerEncountersFromEnemies(level.enemies);
+  },
+
+  transitionDungeonByDoor: (delta) => {
+    const state = get();
+    const grid = state.dungeonGrid;
+    const gpos = state.dungeonGridPos;
+    if (!grid || !gpos || state.runMode !== 'dungeon') return;
+    const nx = gpos.x + delta.dx;
+    const ny = gpos.y + delta.dy;
+    if (ny < 0 || ny >= grid.length || nx < 0 || nx >= (grid[0]?.length ?? 0)) return;
+    const cell = grid[ny][nx];
+    if (!cell) return;
+
+    const raw = materializeDungeonRoom(grid, state.dungeonFloor, nx, ny);
+    const level = cloneRoomTemplate({ ...raw, layout: layoutStripPlayerAt(raw.layout) });
+    const enteredFrom = { dx: -delta.dx, dy: -delta.dy };
+    const playerPos = spawnPosForDungeonEntry(level, enteredFrom);
+
+    const doorStates = new Map<string, boolean>();
+    for (const door of level.doors) {
+      for (let i = 0; i < door.chars.length; i++) {
+        doorStates.set(doorKey(doorCellAt(door, i)), false);
+      }
+    }
+    const explored = new Set(state.exploredDungeonCells);
+    explored.add(`${nx},${ny}`);
+    const initialProjectiles = level.lightPuzzle ? [createLightPulse(level.lightPuzzle)] : [];
+
+    set({
+      dungeonGridPos: { x: nx, y: ny },
+      exploredDungeonCells: explored,
+      currentRoom: level,
+      playerPos,
+      doorStates,
+      renderedGrid: buildFullGrid(
+        level,
+        playerPos,
+        doorStates,
+        level.enemies,
+        level.barrels,
+        initialProjectiles,
+        0,
+        level.containers,
+      ),
+      enemies: level.enemies.map((e) => ({ ...e })),
+      barrels: level.barrels.map((b) => ({ ...b })),
+      containers: level.containers.map((c) => ({ ...c })),
+      projectiles: initialProjectiles,
+      signPopup: null,
+      mode: 'NORMAL',
+      commandBuffer: '',
+      lastShotDir: null,
+      pendingKey: null,
+      pendingVisualInner: null,
+      lightPuzzleSolved: false,
+    });
+    get().addMessage(`-- ${level.name} --`, COLORS.accent);
+    get().registerEncountersFromEnemies(level.enemies);
+  },
+
+  registerEncountersFromEnemies: (enemies) => {
+    set((s) => {
+      const next = new Set(s.encounteredEnemies);
+      for (const e of enemies) {
+        if (e.archetypeId) next.add(e.archetypeId);
+      }
+      return { encounteredEnemies: next };
+    });
+  },
+
+  jumpLandmarkForward: () => {
+    const state = get();
+    if (state.mode !== 'NORMAL' || state.helpOpen || state.playerDead) return;
+    const room = state.currentRoom;
+    if (!room) return;
+    const { dx, dy } = state.playerDir;
+    if (dx === 0 && dy === 0) return;
+    const interesting = (ch: string) =>
+      ch !== '.' && ch !== ' ' && ch !== '@' && !isDoorChar(ch);
+    let x = state.playerPos.x;
+    let y = state.playerPos.y;
+    const ox = x;
+    const oy = y;
+    const maxSteps = Math.max(room.width, room.height);
+    for (let s = 0; s < maxSteps; s++) {
+      x += dx;
+      y += dy;
+      if (y < 1 || y >= room.height - 1 || x < 1 || x >= room.width - 1) return;
+      const ch = room.layout[y]?.[x] ?? '#';
+      if (terrainBlocksMovement(ch, room)) return;
+      if (interesting(ch)) {
+        get().movePlayer(x - ox, y - oy);
+        return;
+      }
+    }
+  },
+
+  jumpLandmarkBackward: () => {
+    const state = get();
+    if (state.mode !== 'NORMAL' || state.helpOpen || state.playerDead) return;
+    const od = { ...state.playerDir };
+    set({ playerDir: { dx: -od.dx, dy: -od.dy } });
+    get().jumpLandmarkForward();
+    set({ playerDir: od });
+  },
+
+  jumpLineStart: () => {
+    const state = get();
+    if (state.mode !== 'NORMAL' || state.helpOpen || state.playerDead) return;
+    const room = state.currentRoom;
+    if (!room) return;
+    const y = state.playerPos.y;
+    let tx = -1;
+    for (let x = 1; x < room.width - 1; x++) {
+      const ch = room.layout[y]?.[x] ?? '#';
+      const pickupHere = room.keys.some((k) => !k.collected && k.pos.x === x && k.pos.y === y);
+      const blocked =
+        state.enemies.some((e) => !e.dead && e.pos.x === x && e.pos.y === y) ||
+        state.barrels.some((b) => !b.destroyed && b.pos.y === y && x >= b.pos.x - 1 && x <= b.pos.x + 1);
+      if (blocked) continue;
+      if (isWalkable(ch) || pickupHere) {
+        tx = x;
+        break;
+      }
+    }
+    if (tx < 0) return;
+    get().movePlayer(tx - state.playerPos.x, 0);
+  },
+
+  jumpLineEnd: () => {
+    const state = get();
+    if (state.mode !== 'NORMAL' || state.helpOpen || state.playerDead) return;
+    const room = state.currentRoom;
+    if (!room) return;
+    const y = state.playerPos.y;
+    let tx = -1;
+    for (let x = room.width - 2; x >= 1; x--) {
+      const ch = room.layout[y]?.[x] ?? '#';
+      const pickupHere = room.keys.some((k) => !k.collected && k.pos.x === x && k.pos.y === y);
+      const blocked =
+        state.enemies.some((e) => !e.dead && e.pos.x === x && e.pos.y === y) ||
+        state.barrels.some((b) => !b.destroyed && b.pos.y === y && x >= b.pos.x - 1 && x <= b.pos.x + 1);
+      if (blocked) continue;
+      if (isWalkable(ch) || pickupHere) {
+        tx = x;
+        break;
+      }
+    }
+   
+    if (tx < 0) return;
+    get().movePlayer(tx - state.playerPos.x, 0);
   },
 
   addMessage: (text, color) => set((s) => ({
@@ -689,11 +1012,83 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
 
-    if (trimmed === 'retry') {
-      const level = state.currentLevel;
+    if (trimmed === 'skip-tutorial' || trimmed === 'skip tutorial') {
       set({ commandBuffer: '', mode: 'NORMAL' });
-      get().loadLevel(level);
-      get().addMessage('Restarting level...', COLORS.accent);
+      get().startDungeonRun();
+      get().addMessage('Tutorial skipped — entering the procedural dungeon.', COLORS.accent);
+      return;
+    }
+
+    if (trimmed === 'heal') {
+      if (state.playerMP < 2) {
+        get().addMessage('Not enough MP for :heal (need 2).', COLORS.hpFull);
+        set({ commandBuffer: '', mode: 'NORMAL' });
+        return;
+      }
+      const nh = Math.min(state.playerMaxHP, state.playerHP + 5);
+      set({
+        playerHP: nh,
+        playerMP: state.playerMP - 2,
+        commandBuffer: '',
+        mode: 'NORMAL',
+      });
+      get().addMessage(`Restored to ${nh} HP. (-2 MP)`, COLORS.doorOpen);
+      return;
+    }
+
+    if (trimmed.startsWith('cast')) {
+      const sub = trimmed.slice('cast'.length).trim();
+      if (sub === 'fireball') {
+        if (state.playerMP < 3) {
+          get().addMessage('Not enough MP for :cast fireball (need 3).', COLORS.hpFull);
+          set({ commandBuffer: '', mode: 'NORMAL' });
+          return;
+        }
+        const room = state.currentRoom;
+        if (!room) return;
+        const pp = state.playerPos;
+        const add = [
+          createProjectile({ ...pp }, 1, 0, 'player', 2, '*'),
+          createProjectile({ ...pp }, -1, 0, 'player', 2, '*'),
+          createProjectile({ ...pp }, 0, 1, 'player', 2, '*'),
+          createProjectile({ ...pp }, 0, -1, 'player', 2, '*'),
+        ];
+        set({
+          projectiles: [...state.projectiles, ...add],
+          playerMP: state.playerMP - 3,
+          commandBuffer: '',
+          mode: 'NORMAL',
+        });
+        get().addMessage('Fireball nova! (-3 MP)', COLORS.explosion);
+        get().rerenderGrid();
+        return;
+      }
+    }
+
+    if (trimmed === 'retry') {
+      set({ commandBuffer: '', mode: 'NORMAL' });
+      if (get().runMode === 'dungeon') {
+        get().startDungeonRun();
+        get().addMessage('Regenerated procedural floor.', COLORS.accent);
+      } else {
+        const level = state.currentLevel;
+        get().loadLevel(level);
+        get().addMessage('Restarting level...', COLORS.accent);
+      }
+      return;
+    }
+
+    const warpMatch = trimmed.match(/^warp\s+(\d+)$/);
+    if (warpMatch) {
+      const n = parseInt(warpMatch[1]!, 10);
+      const list = getTutorialLevels();
+      if (n < 0 || n >= list.length) {
+        get().addMessage(`No level index ${n} (valid: 0–${list.length - 1}).`, COLORS.hpFull);
+      } else {
+        get().loadLevel(n);
+        get().addMessage(`Warped to level ${n}: ${list[n]?.name ?? '?'}.`, COLORS.accent);
+      }
+      set({ commandBuffer: '', mode: 'NORMAL' });
       return;
     }
 
@@ -728,7 +1123,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   }),
 
   startGame: () => {
-    set({ gameStarted: true });
+    set({
+      gameStarted: true,
+      encounteredEnemies: new Set(),
+    });
     get().loadLevel(0);
   },
 
@@ -884,6 +1282,74 @@ export const useGameStore = create<GameState>((set, get) => ({
       return item;
     });
     set({ inventoryItems: items });
+  },
+
+  consumeInventoryItem: (itemId) => {
+    const state = get();
+    const item = state.inventoryItems.find((i) => i.id === itemId);
+    if (!item) {
+      get().addMessage('Item not in inventory.', COLORS.textDim);
+      return;
+    }
+    if (!item.consumable) {
+      get().addMessage('gg consumes equipped potions and food. Use d to fire a weapon.', COLORS.textDim);
+      return;
+    }
+    if (item.count <= 0) {
+      set({ equippedItemId: state.equippedItemId === itemId ? null : state.equippedItemId });
+      get().addMessage('Nothing left to use.', COLORS.textDim);
+      return;
+    }
+
+    const heal = item.consumable.healHp;
+    const newHP = Math.min(state.playerMaxHP, state.playerHP + heal);
+    const healed = newHP - state.playerHP;
+
+    if (item.count <= 1) {
+      const nextItems = state.inventoryItems.filter((i) => i.id !== item.id);
+      const idx = state.inventory.indexOf(item.id);
+      const nextInv =
+        idx === -1 ? state.inventory : [...state.inventory.slice(0, idx), ...state.inventory.slice(idx + 1)];
+      set({
+        playerHP: newHP,
+        inventoryItems: nextItems,
+        inventory: nextInv,
+        equippedItemId: state.equippedItemId === itemId ? null : state.equippedItemId,
+      });
+    } else {
+      set({
+        playerHP: newHP,
+        inventoryItems: state.inventoryItems.map((i) =>
+          i.id === item.id ? { ...i, count: i.count - 1 } : i,
+        ),
+      });
+    }
+
+    get().addMessage(
+      healed > 0
+        ? `Used ${item.name}. +${healed} HP (${newHP}/${state.playerMaxHP})`
+        : `Used ${item.name}. (already at full HP)`,
+      COLORS.doorOpen,
+    );
+    get().rerenderGrid();
+  },
+
+  useQuickSlot: (slot) => {
+    const state = get();
+    const item = state.inventoryItems.find((i) => i.quickSlot === slot);
+    if (!item) {
+      get().addMessage(`Quick slot ${slot} is empty. Assign in :inv with 1–3 on a row.`, COLORS.textDim);
+      return;
+    }
+    if (item.consumable) {
+      get().consumeInventoryItem(item.id);
+      return;
+    }
+    if (item.weapon) {
+      get().equipItem(item.id);
+      return;
+    }
+    get().addMessage('Nothing usable in that slot (equip a potion or weapon).', COLORS.textDim);
   },
 
   addInventoryItem: (id, name, char, weapon?, consumable?) => {

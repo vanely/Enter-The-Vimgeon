@@ -1,5 +1,5 @@
-import { useGameStore, armPendingChordTimer, clearPendingChordTimer } from './gameState';
-import { meleeStrike, repeatShot, findDodgeTarget, applyBarrelExplosion } from './combat';
+import { useGameStore, armPendingChordTimer, clearPendingChordTimer, tryOpenAllEnemiesDeadGates } from './gameState';
+import { meleeStrike, MELEE_COOLDOWN_TICKS, repeatShot, findDodgeTarget, applyBarrelExplosion } from './combat';
 import { COLORS } from '../utils/colors';
 
 const MOVE_KEYS: Record<string, [number, number]> = {
@@ -177,6 +177,42 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
     return;
   }
 
+  if (key === 'w' && state.unlockedKeys.has('w')) {
+    e.preventDefault();
+    stopMovement();
+    state.jumpLandmarkForward();
+    state.updateLastInputTime();
+    return;
+  }
+  if (key === 'b' && state.unlockedKeys.has('b')) {
+    e.preventDefault();
+    stopMovement();
+    state.jumpLandmarkBackward();
+    state.updateLastInputTime();
+    return;
+  }
+  if (key === '0' && state.unlockedKeys.has('0')) {
+    e.preventDefault();
+    stopMovement();
+    state.jumpLineStart();
+    state.updateLastInputTime();
+    return;
+  }
+  if (key === '$' && state.unlockedKeys.has('$')) {
+    e.preventDefault();
+    stopMovement();
+    state.jumpLineEnd();
+    state.updateLastInputTime();
+    return;
+  }
+  if (key === ';' && state.unlockedKeys.has(';')) {
+    e.preventDefault();
+    stopMovement();
+    handleRepeatShot(state);
+    state.updateLastInputTime();
+    return;
+  }
+
   if (e.ctrlKey && key === 'd') {
     e.preventDefault();
     handleDodgeRoll(state, 5);
@@ -236,6 +272,16 @@ function handleNormalInput(e: KeyboardEvent, state: ReturnType<typeof useGameSto
       handleDodge(state);
       state.updateLastInputTime();
       break;
+    case '1':
+    case '2':
+    case '3':
+      e.preventDefault();
+      stopMovement();
+      clearPendingChordTimer();
+      useGameStore.setState({ pendingKey: null });
+      state.useQuickSlot(parseInt(key, 10));
+      state.updateLastInputTime();
+      break;
     case 'v': {
       e.preventDefault();
       stopMovement();
@@ -278,11 +324,13 @@ function handleMelee(state: ReturnType<typeof useGameStore.getState>): void {
   const room = state.currentRoom;
   if (!room) return;
 
+  if (state.meleeCooldown > 0) return;
+
   const result = meleeStrike(state.playerPos, state.enemies, state.barrels, state.playerDir);
   const killed = result.killed;
 
   let enemies = result.updatedEnemies;
-  let barrels = result.updatedBarrels;
+  const barrels = result.updatedBarrels;
 
   for (const bPos of result.barrelHits) {
     const explResult = applyBarrelExplosion(bPos, enemies, state.playerPos);
@@ -295,7 +343,15 @@ function handleMelee(state: ReturnType<typeof useGameStore.getState>): void {
     }
   }
 
-  useGameStore.setState({ enemies, barrels });
+  let doorStates = state.doorStates;
+  if (room) {
+    const patch = new Map(doorStates);
+    const msg = tryOpenAllEnemiesDeadGates(room, enemies, patch);
+    doorStates = patch;
+    if (msg) state.addMessage(msg, COLORS.doorOpen);
+  }
+
+  useGameStore.setState({ enemies, barrels, meleeCooldown: MELEE_COOLDOWN_TICKS, doorStates });
 
   if (killed.length > 0) {
     for (const id of killed) {
@@ -336,38 +392,7 @@ function handleConsumeEquipped(state: ReturnType<typeof useGameStore.getState>):
     return;
   }
 
-  const heal = item.consumable.healHp;
-  const newHP = Math.min(state.playerMaxHP, state.playerHP + heal);
-  const healed = newHP - state.playerHP;
-
-  let nextItems;
-  if (item.count <= 1) {
-    nextItems = state.inventoryItems.filter((i) => i.id !== item.id);
-    const idx = state.inventory.indexOf(item.id);
-    const nextInv = idx === -1
-      ? state.inventory
-      : [...state.inventory.slice(0, idx), ...state.inventory.slice(idx + 1)];
-    useGameStore.setState({
-      playerHP: newHP,
-      inventoryItems: nextItems,
-      inventory: nextInv,
-      equippedItemId: null,
-    });
-  } else {
-    nextItems = state.inventoryItems.map((i) =>
-      i.id === item.id ? { ...i, count: i.count - 1 } : i
-    );
-    useGameStore.setState({
-      playerHP: newHP,
-      inventoryItems: nextItems,
-    });
-  }
-
-  state.addMessage(
-    healed > 0 ? `Used ${item.name}. +${healed} HP (${newHP}/${state.playerMaxHP})` : `Used ${item.name}. (already at full HP)`,
-    COLORS.doorOpen,
-  );
-  useGameStore.getState().rerenderGrid();
+  useGameStore.getState().consumeInventoryItem(item.id);
 }
 
 function handleWeaponFire(state: ReturnType<typeof useGameStore.getState>): void {
@@ -425,6 +450,54 @@ function handleWeaponFire(state: ReturnType<typeof useGameStore.getState>): void
   useGameStore.getState().rerenderGrid();
 }
 
+function handleRepeatShot(state: ReturnType<typeof useGameStore.getState>): void {
+  const ls = state.lastShotDir;
+  if (!ls) {
+    state.addMessage('Nothing to repeat. Press d to fire first.', COLORS.textDim);
+    return;
+  }
+  const equippedId = state.equippedItemId;
+  if (!equippedId) {
+    state.addMessage('No weapon equipped.', COLORS.textDim);
+    return;
+  }
+  const item = state.inventoryItems.find((i) => i.id === equippedId);
+  if (!item?.weapon) {
+    state.addMessage('Equip a ranged weapon to repeat shots (;).', COLORS.textDim);
+    return;
+  }
+  const weapon = item.weapon;
+  if (weapon.ammoType === 'ammo') {
+    if (item.count <= 0) {
+      state.addMessage(`Out of ammo for ${weapon.name}!`, COLORS.hpFull);
+      return;
+    }
+    useGameStore.setState({
+      inventoryItems: state.inventoryItems.map((i) =>
+        i.id === item.id ? { ...i, count: i.count - 1 } : i
+      ),
+    });
+  } else {
+    if (state.weaponCooldown > 0) {
+      state.addMessage(`${weapon.name} cooling down... (${state.weaponCooldown} ticks)`, COLORS.textDim);
+      return;
+    }
+    useGameStore.setState({ weaponCooldown: weapon.cooldownTicks });
+  }
+  const proj = repeatShot(state.playerPos, ls, weapon.damage, weapon.projectileChar);
+  useGameStore.setState({
+    projectiles: [...useGameStore.getState().projectiles, proj],
+    lastShotDir: ls,
+    playerDir: ls,
+  });
+  const st2 = useGameStore.getState();
+  const ammoStr = weapon.ammoType === 'ammo'
+    ? ` (${st2.inventoryItems.find((i) => i.id === item.id)?.count ?? 0} left)`
+    : '';
+  state.addMessage(`Again!${ammoStr}`, COLORS.projectilePlayer);
+  useGameStore.getState().rerenderGrid();
+}
+
 function handleDodge(state: ReturnType<typeof useGameStore.getState>): void {
   const room = state.currentRoom;
   if (!room) return;
@@ -451,7 +524,7 @@ function handleDodgeRoll(state: ReturnType<typeof useGameStore.getState>, dy: nu
   targetY = Math.max(1, Math.min(targetY, room.height - 2));
 
   const layoutChar = room.layout[targetY]?.[state.playerPos.x] || '#';
-  if (layoutChar === '#' || layoutChar === '+' || layoutChar === '|' || layoutChar === '-') {
+  if (layoutChar === '#' || layoutChar === '+' || layoutChar === '|' || layoutChar === '-' || layoutChar === '_') {
     state.addMessage('Can\'t roll there!', COLORS.textDim);
     return;
   }

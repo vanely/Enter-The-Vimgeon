@@ -1,12 +1,10 @@
-import { useGameStore } from './gameState';
-import { doorCellAt } from './doorGeometry';
+import { useGameStore, tryOpenAllEnemiesDeadGates } from './gameState';
 import { advanceProjectiles, advanceLightPulse, createLightPulse } from './projectiles';
 import { tickEnemies } from './entities';
 import { applyBarrelExplosion, tickBarrelExplosions } from './combat';
 import { openLightPuzzleDoors } from './lightPuzzle';
 import { COLORS } from '../utils/colors';
-
-const TICK_RATE_MS = 150;
+import { TICK_RATE_MS } from './tickConfig';
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let running = false;
@@ -26,7 +24,7 @@ function tick() {
   projectiles = projectiles.filter((p) => p.owner !== 'light');
   let totalPlayerDamage = 0;
 
-  const projResult = advanceProjectiles(projectiles, room, enemies, barrels, state.playerPos);
+  const projResult = advanceProjectiles(projectiles, room, enemies, barrels, state.playerPos, state.doorStates);
   projectiles = projResult.updatedProjectiles;
   totalPlayerDamage += projResult.playerHit;
 
@@ -77,7 +75,10 @@ function tick() {
   let weaponCooldown = state.weaponCooldown;
   if (weaponCooldown > 0) weaponCooldown--;
 
-  let doorStates = new Map(state.doorStates);
+  let meleeCooldown = state.meleeCooldown;
+  if (meleeCooldown > 0) meleeCooldown--;
+
+  const doorStates = new Map(state.doorStates);
   let lightPuzzleSolved = state.lightPuzzleSolved;
 
   if (room.lightPuzzle) {
@@ -96,17 +97,9 @@ function tick() {
     projectiles = [...projectiles, ...lightPulses];
   }
 
-  const allDead = enemies.length > 0 && enemies.every((e) => e.dead);
-  if (allDead) {
-    const closedDoor = room.doors.find((d) => !d.open && d.gateCondition === 'all_enemies_dead');
-    if (closedDoor) {
-      for (let i = 0; i < closedDoor.chars.length; i++) {
-        const p = doorCellAt(closedDoor, i);
-        doorStates.set(`${p.x},${p.y}`, true);
-      }
-      closedDoor.open = true;
-      useGameStore.getState().addMessage('All enemies defeated! The door opens!', COLORS.doorOpen);
-    }
+  const gateMsg = tryOpenAllEnemiesDeadGates(room, enemies, doorStates);
+  if (gateMsg) {
+    useGameStore.getState().addMessage(gateMsg, COLORS.doorOpen);
   }
 
   useGameStore.setState({
@@ -115,6 +108,7 @@ function tick() {
     projectiles,
     playerInvincible: invincible,
     weaponCooldown,
+    meleeCooldown,
     doorStates,
     lightPuzzleSolved,
   });
