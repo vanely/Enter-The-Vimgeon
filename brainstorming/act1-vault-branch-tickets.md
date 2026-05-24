@@ -2,6 +2,8 @@
 
 **Intent:** Ship **one** post-tutorial experience that implements the roadmap suggestion: **spine (1) “graduate from tutorial”** plus a **thin slice of spine (2)** so a **light-puzzle vault** is a real, optional branch—not a orphaned `puzzleLevels` export. Combat and puzzle should both feel *in the same game*, not two demos stapled together.
 
+**Workflow:** This file is **execution / QA tickets** for the Act 1 slice. **Product direction and engine robustness** are brainstormed in `brainstorming/` first — especially `engine-production.md`, `story.md`, `levels.md`, `weapons.md`, `items.md`, `monsters.md`. When those docs read “locked,” spin **per-doc task lists** (or PR breakdowns) from them; keep this appendix aligned with `levels.md` indices and door graph.
+
 **Anchors:** `roadmap.md` (strategic forks + suggestion), `levels.md` (loader truth), `src/data/rooms/puzzles.ts` (`puzzlePrismaticVault`), `src/data/rooms/act1.ts` (`act1Levels`), `src/data/rooms/tutorial.ts` (`tutorialLevels`, help room → Act 1 index 7).
 
 ---

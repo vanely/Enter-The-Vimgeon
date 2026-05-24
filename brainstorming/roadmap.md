@@ -1,65 +1,73 @@
 # Roadmap — where we go from here
 
-Brainstorming next directions now that the **tutorial track**, **core combat loop**, **inventory / equip**, **containers & pickups**, **`:help`**, and a **stub puzzle room** exist. Nothing here is committed scope; it is a menu of plausible paths.
+Brainstorming **direction and sequencing**. **`brainstorming/*` docs are the design front** — we deepen those *before* large code changes; **task lists per doc** come after each brainstorm “locks” (see `engine-production.md` for engineering criteria).
 
-## Where we are (anchor)
+## Where we are (anchor) — refresh
 
-- **Player fantasy:** grid movement, Vim-ish modes (NORMAL / INSERT / VISUAL / COMMAND), melee `x`, ranged `d`, consumables `gg`, dodge `%` + rolls, barrels, doors, signs, message log.
-- **Content:** seven tutorial rooms + one light-puzzle vault defined but not on the main loader (`levels.md`).
-- **Gaps:** no persistent “dungeon run” after tutorial; help sections beyond controls/combat/items are thin; no save/meta-progress; story is a blank (`story.md`).
+- **Player fantasy:** grid movement, Vim-ish modes (NORMAL / INSERT / VISUAL / COMMAND), melee `x`, ranged `d`, consumables `gg` / quick slots, dodge `%` + rolls, barrels, doors, signs, message log, minimap in dungeon.
+- **Content:** **tutorial 0–6** + **Act 1 (7–11)** merged in one campaign array; **optional Prismatic Vault** on the branch; **procedural dungeon** after Act 1 terminus. See `levels.md` for indices.
+- **Gaps:** story still thin (`story.md`); help sections partly stubby; **no** persistent save/meta-run; Act 1 **content depth** (more rooms, polish tickets in `act1-vault-branch-tickets.md`) not finished; **engine hardening** documented intent in `engine-production.md`, not a checklist yet.
 
-## Strategic forks (pick one primary spine)
+## Strategic forks (still valid — pick emphasis, not exclusivity)
 
-These are not mutually exclusive long-term, but **ordering** matters for momentum.
+1. **“Graduate from tutorial” spine** — Hand-authored beats after the help room; **in progress** via Act 1; extend with more shaft rooms and tuning (`levels.md`, content docs).
+2. **“Puzzle layer” spine** — Thin slice **shipped** (vault branch); can add more puzzle rooms *after* beam/light rules are treated as first-class in engine docs.
+3. **“Vim depth” spine** — High-signal motions tied 1:1 to mechanics; high tutorial debt — sequence **after** Act 1 + one boss feel fun.
+4. **“Roguelike / replay” spine** — Procedural grid exists; **meta-progress / run identity** later. Needs save/run summary (`engine-production.md` + roadmap medium term).
 
-1. **“Graduate from tutorial” spine**  
-   First playable “real” segment after the help room: a short **Act 1** (5–15 rooms) with a boss or exit, reusing existing gates (`reach`, `command_open`, `all_enemies_dead`, `light_puzzle`, `help_then_reach`). Lowest risk: mostly data (`levels.md`, `monsters.md`, `items.md`, `weapons.md`).
+**Active suggestion:** Keep **(1) + optional (2)** as the default spine while **engine-production.md** invariants prevent content-scale bugs.
 
-2. **“Puzzle layer” spine**  
-   Wire `puzzleLevels` (or a `storyLevels` array) into a **second mode** or chapter select so Prismatic Vault is reachable without hacks. Good if you want the brand to feel like **text puzzles + combat**, not only shooting goblins.
+## Phased brain → build (recommended)
 
-3. **“Vim depth” spine**  
-   Add a small number of **high-signal** motions (e.g. word objects, marks, one command-mode action) each tied to **one** mechanic with a dedicated room. Risk: scope creep and tutorial debt unless each addition has a **single** teaching room.
+| Phase | Brainstorm focus (docs) | Build unlock |
+|-------|-------------------------|--------------|
+| **A — Lock language** | `artistic-ideation.md` (ASCII rules, palette, motion); `story.md` one-paragraph premise + Act 1 tone | Art tokens, sign voice, glyph registry |
+| **B — Lock progression** | `levels.md` (linear beat chart + chapter template); `roadmap.md` milestone | Room authoring pipeline, fewer graph mistakes |
+| **C — Lock catalog** | `items.md`, `weapons.md`, `monsters.md` **filled tables** + tie-ins | Data-only PRs without engine rewrites |
+| **D — Lock simulation** | `engine-production.md` tick/input split, invariants, tests idea | Refactors + dev tooling with confidence |
 
-4. **“Roguelike / replay” spine**  
-   Procedural or shuffled rooms, death = run end, unlocks. Heavier engineering (generation, balance, UI). Better **after** one hand-authored Act proves fun.
+Work can overlap lightly, but **avoid coding large new systems** until **C** has at least draft rows for anything that needs new fields on `Enemy` / `Weapon` / `RoomTemplate`.
 
-**Suggestion:** (1) + a thin slice of (2): **one** post-tutorial branch that includes the vault as an optional side path, so puzzle and combat both feel “in the game.”
+## Concrete next moves (short term) — design-first
 
-## Concrete next moves (short term)
+| Idea | Doc to extend first | Why |
+|------|----------------------|-----|
+| **Act 1 depth** | `levels.md` + `monsters.md` | More shaft rooms and encounter recipes before touching `act1.ts` again. |
+| **Vim-flavored loot** | `items.md` + `weapons.md` | Name + fantasy + balance columns filled; then map to existing `equip` / `gg` / `d` verbs. |
+| **Readable ASCII** | `artistic-ideation.md` | Boss glyph policy, hazard vocabulary, animation caps. |
+| **Narrative glue** | `story.md` | One paragraph premise + Act table so signs and room names stop drifting. |
+| **Engine contract** | `engine-production.md` | Turn “we should” into invariant list; *then* task list for refactors. |
 
-| Idea | Why now | Touches |
-|------|---------|---------|
-| **Level loader abstraction** | Tutorial is a single array; post-tutorial needs chapters or `type: 'tutorial' \| 'dungeon'`. | `App.tsx`, `gameState.ts`, new `data/rooms/*.ts` |
-| **Story beat after index 6** | Player hits a wall today; give a door to “Chapter 1” or a hub sign. | `tutorial.ts` or new file + `story.md` |
-| **Wire Prismatic Vault** | Already built; validates light puzzle in production. | `puzzles.ts`, loader, fix `targetLevel` / door graph (`levels.md`) |
-| **Enemy + item pass for Act 1** | Reuse AI patterns; add 2–3 new monsters and 3–5 pickups for variety. | `monsters.md`, `items.md`, `enemies.ts`, `items.ts` |
-| **Help: one real stub → useful** | Map / spells / bestiary: either one paragraph of truth or hide until implemented. | `src/data/help/controls.ts` |
-| **Playtest friction** | Restart to level N, god mode, or dev `:warp n` if you iterate rooms often. | `executeCommand` or dev-only |
+*Retire rows from the old “touches `App.tsx`” table when superseded — implementation detail belongs in task trackers after brainstorm lock.*
 
-## Medium term (once Act 1 is fun once)
+## Medium term (unchanged directionally)
 
-- **Persistence:** save slot or run summary (even localStorage) so iteration is not “always from zero.”
-- **Audio / juice:** hitstop, projectile SFX, door sound — optional but raises perceived quality.
-- **Boss pattern:** one multi-phase enemy teaching a **single** new rule (e.g. only vulnerable after light puzzle).
+- **Persistence** — Run summary or save slot; defines what “Act 2” means for replay.
+- **Juice** — SFX, hitstop; must respect ASCII readability rules in `artistic-ideation.md`.
+- **Boss** — One pattern monster with **one** new rule; design in `monsters.md` + room set-piece in `levels.md`.
 
-## Cross-links (other brainstorm files)
+## Cross-links
 
-- **`story.md`** — why the dungeon exists and why Act 1 matters (names the exit condition).
-- **`levels.md`** — room list and wiring truth; new rooms land here as references.
-- **`monsters.md` / `weapons.md` / `items.md`** — content backlog for Act 1 without bloating the engine in one PR.
+| Doc | Role |
+|-----|------|
+| `engine-production.md` | Simulation robustness, entities, tick authority |
+| `levels.md` | Geography, progression, room grammar |
+| `story.md` | Premise, acts, emotional payoff |
+| `artistic-ideation.md` | Look, ASCII discipline, tone |
+| `items.md` / `weapons.md` / `monsters.md` | Catalog + balance + Vim flavor |
+| `act1-vault-branch-tickets.md` | **Execution** backlog for current branch (separate from pure brainstorm) |
 
-## Open questions (decide when you pick a spine)
+## Open questions
 
-- Is the fantasy **“learn Vim through a game”** or **“a roguelike that uses Vim keys”**? Ratio drives how strict motions are vs readable game verbs.
-- Should **INSERT** ever do more than move + `:` (e.g. type on signs), or stay minimal?
-- One **canonical win state** for v1: escape the first floor? Defeat a named villain? “Finish tutorial” is already done — what replaces it emotionally?
+- **Player promise:** “Learn Vim” vs “Roguelike with Vim keys” — ratio sets strictness of future motions (`story.md` + `roadmap` should answer once).
+- **INSERT scope** — Stay minimal until Act 1 ships fun combat loop.
+- **v1 win state** — Name it in `story.md` so `levels.md` terminus always telegraphs the same goal.
 
-## Anti-goals (guardrails)
+## Anti-goals
 
-- Avoid adding three systems at once (e.g. crafting + shops + proc gen) before **one** post-tutorial arc is winnable start-to-finish.
-- Avoid duplicating “two ways to do the same job” without a clear fantasy (registers vs equip was a good cut).
+- No mega-features (crafting + shops + full proc narrative) before **one** post-tutorial path feels **complete and fair** twice through playtest.
+- No *orphan brainstorm*: if it’s not in a doc here, it shouldn’t drive a PR.
 
 ---
 
-*Revise this doc as soon as you pick a spine; the table of “concrete next moves” should stay honest to what is actually next.*
+*Revise this file when Phase A–D advance; keep “where we are” honest.*

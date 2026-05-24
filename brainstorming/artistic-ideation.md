@@ -1,6 +1,8 @@
 # Artistic ideation
 
-Brainstorming look, feel, tone, and presentation—not mechanics. Pair with `story.md` for narrative; with `roadmap.md` for what ships when.
+**Art direction (draft, one paragraph):** A terse, high-contrast terminal dungeon where **every glyph earns its place**—doors and actors read instantly, puzzle light and projectiles use a restrained accent palette, and flavor (flames, runes) stays Tier-4 optional so combat never turns into glyph soup. Tone leans **manual-dry signs + neutral system log**, with mood (horror-ish / whimsical) picked once for Act 1 and held consistent.
+
+Brainstorming look, feel, tone, and presentation—not mechanics. Pair with `story.md` for narrative; with `roadmap.md` for what ships when; with `engine-production.md` for what the simulation can animate safely.
 
 ## Core metaphor
 
@@ -20,6 +22,35 @@ Brainstorming look, feel, tone, and presentation—not mechanics. Pair with `sto
 
 - **Fonts** — JetBrains Mono / Fira Code already signal “editor.” Consider one display font for titles only (title screen, chapter cards) vs in-grid strict mono.
 - **Motion** — Subtle: cursor blink on command line, door “creak” as color pulse, hit flash on `@`. Avoid busy particle systems that fight ASCII legibility.
+- **Signs & copy** — In-world text can be slightly archaic or manual-page dry; system messages slightly wry or neutral—pick one voice and stick to it.
+
+## ASCII art style — robust & readable (production rules)
+
+These are **design constraints** so art direction doesn’t fight combat clarity as content scales.
+
+### Glyph tiers
+
+| Tier | Role | Examples | Rules |
+|------|------|----------|--------|
+| **Tier 0 — Terrain** | Walkable / wall / hazard | `. #` (+ room-specific solids) | Never animate glyph; reserve for collision truth. |
+| **Tier 1 — Actors** | Player, enemies | `@`, `g`–`z` band | One primary cell per entity; multi-cell bosses are a **conscious** exception with a locked silhouette spec. |
+| **Tier 2 — Interactive** | Doors, brackets, containers | `\| - _` doors, `()` `[]` `{}` | Door vocabulary must stay **consistent game-wide** (`levels.md` + code share the same legend). |
+| **Tier 3 — FX** | Projectiles, beams, embers | `> ^ *` | Motion allowed; cap **update rate** vs tick so players can still count tiles. |
+| **Tier 4 — Flavor** | Decorative torch, optional flame sketch | `*` variants, paren stacks | Optional; must not share Tier 1 silhouettes. |
+
+### Silhouette & contrast
+
+- **Silhouette test** — At a glance, can the player name “enemy / projectile / door / floor”? If two things share a glyph + similar color, fix one.
+- **Color budget** — Prefer **few** semantic colors: floor neutral, danger warm, puzzle cool, story accent reserved. Don’t color every enemy differently until tiering is documented.
+- **Grid size** — Wide rooms are pretty but dilute tension; **choke readability** belongs in encounter design (`monsters.md`), not only layout.
+
+### Linear “read” for progression (visual)
+
+Even without cutscenes, progression can **read** through ASCII:
+
+- **Chapter headers** — Same banner pattern in messages when entering a new act (`-- Act name --`).
+- **Escalation** — Slightly denser clutter or richer props *after* a teaching room, not before.
+- **Boss foreshadow** — Unique glyph or **two-line ASCII mark** outside the room ( etched frame, double doors) — spec in `levels.md` when used.
 
 ## Fire / flame (ASCII concept — not implemented)
 
@@ -43,7 +74,6 @@ Direction for a **fire wand**, braziers, or hazards: layered parens as the body,
 - **Base** — Wider rows `( )` / `(   )` stay mostly stable; optional subtle color pulse on accent (warm orange/red in `COLORS`) without changing glyphs every frame.
 
 *Implementation TBD; when building, keep the footprint small so projectiles and combat readability stay primary.*
-- **Signs & copy** — In-world text can be slightly archaic or manual-page dry; system messages slightly wry or neutral—pick one voice and stick to it.
 
 ## Mood & genre dressing
 
